@@ -5,7 +5,7 @@
 
 import { jsPDF } from 'jspdf';
 import { useState, useRef } from 'react';
-import { Loader2, ChevronRight, Copy, ExternalLink, Check, Zap, X } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronDown, Copy, ExternalLink, Check, Zap, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type Component = {
@@ -41,6 +41,43 @@ const IMAGE_MAP: Record<string, string> = {
 function getImageUrl(type: string) {
   const normalized = type.toLowerCase();
   return IMAGE_MAP[normalized] || 'https://images.unsplash.com/photo-15312971212e5-1d159e0007ab?auto=format&fit=crop&q=80&w=400';
+}
+
+function CustomSelect({ value, onChange, options, disabled }: { value: string, onChange: (val: string) => void, options: string[], disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative w-full">
+      <div 
+        onClick={() => !disabled && setOpen(!open)}
+        className={`w-full bg-[#111] border border-white/10 text-white p-4 font-mono text-sm flex justify-between items-center transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-[#00FF66]/50'}`}
+      >
+        <span>{value}</span>
+        <ChevronDown className={`w-4 h-4 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </div>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15 }}
+              className="absolute top-full left-0 right-0 mt-1 bg-[#111] border border-white/10 z-50 shadow-xl overflow-hidden"
+            >
+              {options.map(opt => (
+                <div 
+                  key={opt}
+                  onClick={() => { onChange(opt); setOpen(false); }}
+                  className={`p-4 font-mono text-sm cursor-pointer transition-colors ${value === opt ? 'bg-[#00FF66]/10 text-[#00FF66]' : 'text-white hover:bg-white/5'}`}
+                >
+                  {opt}
+                </div>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export default function App() {
@@ -211,7 +248,7 @@ export default function App() {
         {/* Header Section */}
         <header className="flex justify-between items-center pb-8 border-b border-white/10 mb-10">
           <div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase italic">KREAPC</h1>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter italic">KreaPC</h1>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00FF66] font-bold mt-1">Motor de Selección de Alto Rendimiento</p>
           </div>
           <div className="text-right hidden md:block">
@@ -315,47 +352,30 @@ export default function App() {
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                      <div className="flex flex-col gap-2">
                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Memoria RAM</label>
-                       <select 
+                       <CustomSelect 
                          value={formData.ram}
-                         onChange={(e) => setFormData({...formData, ram: e.target.value})}
-                         className="w-full bg-[#111] border border-white/10 text-white p-4 font-mono text-sm focus:outline-none focus:border-[#00FF66] appearance-none cursor-pointer"
+                         onChange={(val) => setFormData({...formData, ram: val})}
+                         options={['Cualquiera', '16GB', '32GB', '64GB']}
                          disabled={loading}
-                       >
-                         <option className="bg-[#111] text-white" value="Cualquiera">Cualquiera (Recomendado)</option>
-                         <option className="bg-[#111] text-white" value="16GB">16GB</option>
-                         <option className="bg-[#111] text-white" value="32GB">32GB</option>
-                         <option className="bg-[#111] text-white" value="64GB">64GB</option>
-                       </select>
+                       />
                      </div>
                      <div className="flex flex-col gap-2">
                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Almacenamiento</label>
-                       <select 
+                       <CustomSelect 
                          value={formData.storage}
-                         onChange={(e) => setFormData({...formData, storage: e.target.value})}
-                         className="w-full bg-[#111] border border-white/10 text-white p-4 font-mono text-sm focus:outline-none focus:border-[#00FF66] appearance-none cursor-pointer"
+                         onChange={(val) => setFormData({...formData, storage: val})}
+                         options={['Cualquiera', '500GB', '1TB', '2TB', '4TB+']}
                          disabled={loading}
-                       >
-                         <option className="bg-[#111] text-white" value="Cualquiera">Cualquiera (Recomendado)</option>
-                         <option className="bg-[#111] text-white" value="500GB">500GB</option>
-                         <option className="bg-[#111] text-white" value="1TB">1TB</option>
-                         <option className="bg-[#111] text-white" value="2TB">2TB</option>
-                         <option className="bg-[#111] text-white" value="4TB+">4TB+</option>
-                       </select>
+                       />
                      </div>
                      <div className="flex flex-col gap-2">
                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">VRAM (Gráfica)</label>
-                       <select 
+                       <CustomSelect 
                          value={formData.vram}
-                         onChange={(e) => setFormData({...formData, vram: e.target.value})}
-                         className="w-full bg-[#111] border border-white/10 text-white p-4 font-mono text-sm focus:outline-none focus:border-[#00FF66] appearance-none cursor-pointer"
+                         onChange={(val) => setFormData({...formData, vram: val})}
+                         options={['Cualquiera', '8GB', '12GB', '16GB', '24GB']}
                          disabled={loading}
-                       >
-                         <option className="bg-[#111] text-white" value="Cualquiera">Cualquiera (Recomendado)</option>
-                         <option className="bg-[#111] text-white" value="8GB">8GB</option>
-                         <option className="bg-[#111] text-white" value="12GB">12GB</option>
-                         <option className="bg-[#111] text-white" value="16GB">16GB</option>
-                         <option className="bg-[#111] text-white" value="24GB">24GB</option>
-                       </select>
+                       />
                      </div>
                    </div>
                    <label className="flex items-center gap-3 cursor-pointer group">
