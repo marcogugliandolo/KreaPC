@@ -23,6 +23,9 @@ async function startServer() {
 
   app.post("/api/recommend", async (req, res) => {
     try {
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Falta configurar la API Key de Gemini (GEMINI_API_KEY) en las variables de entorno." });
+      }
       const { deviceType, useCase, budget, ram, storage, vram, extraDetails, includePeripherals } = req.body;
       
       const isLaptop = deviceType === 'Portátil';
@@ -45,7 +48,7 @@ Include approximate prices in EUR based on real, current market data in Spain (P
         model: "gemini-3.6-flash",
         contents: prompt,
         config: {
-          systemInstruction: "You are an expert PC builder and tech advisor. Use your knowledge to provide approximate current prices for PC components in Spanish stores (like PcComponentes, Coolmod, Wipoid, Amazon Spain). Always respond in Spanish.",
+          systemInstruction: "You are an expert PC builder and tech advisor. Use your knowledge to provide approximate current prices for PC components in Spanish stores. Always respond in Spanish. For 'searchQuery', you MUST provide the EXACT Manufacturer Part Number (MPN) or the most specific, unambiguous product name (e.g., 'Intel Core i5-13600K', 'Asus TUF Gaming RTX 4070 Ti SUPER 16GB GDDR6X', or 'Corsair RM850x 850W 80 Plus Gold Modular') so the user finds that exact product when searching.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -73,7 +76,7 @@ Include approximate prices in EUR based on real, current market data in Spain (P
                     },
                     searchQuery: {
                       type: Type.STRING,
-                      description: "A good search query to find this item online (e.g., 'ASUS ROG Zephyrus G14 2024' or 'AMD Ryzen 5 7600X').",
+                      description: "The most specific and EXACT search query to find this item, using full manufacturer names and models (e.g. 'MSI MAG B650 TOMAHAWK WIFI' instead of just 'B650 Motherboard').",
                     },
                   },
                   required: ["type", "name", "price", "searchQuery"],
