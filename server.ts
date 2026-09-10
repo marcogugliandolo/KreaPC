@@ -6,15 +6,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -26,6 +17,16 @@ async function startServer() {
       if (!process.env.GEMINI_API_KEY) {
         return res.status(500).json({ error: "Falta configurar la API Key de Gemini (GEMINI_API_KEY) en las variables de entorno." });
       }
+
+      const ai = new GoogleGenAI({ 
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
       const { deviceType, useCase, budget, ram, storage, vram, extraDetails, includePeripherals } = req.body;
       
       const isLaptop = deviceType === 'Portátil';
@@ -48,7 +49,7 @@ Include approximate prices in EUR based on real, current market data in Spain (P
         model: "gemini-3.6-flash",
         contents: prompt,
         config: {
-          systemInstruction: "You are an expert PC builder and tech advisor. Use your knowledge to provide approximate current prices for PC components in Spanish stores. Always respond in Spanish. For 'searchQuery', you MUST provide the EXACT Manufacturer Part Number (MPN) or the most specific, unambiguous product name (e.g., 'Intel Core i5-13600K', 'Asus TUF Gaming RTX 4070 Ti SUPER 16GB GDDR6X', or 'Corsair RM850x 850W 80 Plus Gold Modular') so the user finds that exact product when searching.",
+          systemInstruction: "You are an expert PC builder and tech advisor. Provide realistic, current market prices for PC components in Spanish stores. Do NOT hallucinate unrealistically low prices (e.g. an RTX 4060 laptop is usually >1000 EUR). Always respond in Spanish. For 'searchQuery', provide a CLEAN search term optimized for store search engines. Use ONLY alphanumeric characters and spaces. NO slashes, NO quotes, NO commas. Use the core model name (e.g., 'ASUS TUF Gaming A15 FA507NV' or 'Intel Core i5-13600K').",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -72,11 +73,11 @@ Include approximate prices in EUR based on real, current market data in Spain (P
                     },
                     price: {
                       type: Type.NUMBER,
-                      description: "Approximate price in EUR.",
+                      description: "Realistic approximate current price in EUR.",
                     },
                     searchQuery: {
                       type: Type.STRING,
-                      description: "The most specific and EXACT search query to find this item, using full manufacturer names and models (e.g. 'MSI MAG B650 TOMAHAWK WIFI' instead of just 'B650 Motherboard').",
+                      description: "A clean, store-optimized search query. DO NOT include slashes (/), quotes (\"), or commas. Example: 'ASUS TUF Gaming A15 FA507NV' instead of full specs with slashes.",
                     },
                   },
                   required: ["type", "name", "price", "searchQuery"],
@@ -112,7 +113,8 @@ Include approximate prices in EUR based on real, current market data in Spain (P
         }
         res.status(429).json({ error: errorMsg });
       } else {
-        res.status(500).json({ error: "Hubo un problema al generar la recomendación. Por favor, intenta de nuevo." });
+        const actualError = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ error: `Hubo un problema al generar la recomendación: ${actualError}` });
       }
     }
   });

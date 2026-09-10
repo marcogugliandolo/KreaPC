@@ -241,6 +241,10 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const cleanSearchQuery = (query: string) => {
+    return encodeURIComponent(query.replace(/[\/\"\,\:\(\)]/g, ' ').replace(/\s+/g, ' ').trim());
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00FF66] selection:text-black">
       <div className="max-w-5xl mx-auto px-6 py-8">
@@ -502,7 +506,7 @@ export default function App() {
                         <p className="text-lg font-mono font-bold mb-2">€{comp.price.toLocaleString('es-ES')}</p>
                         <div className="flex flex-wrap gap-2 sm:justify-end">
                           <a 
-                            href={`https://www.pccomponentes.com/buscar/?query=${encodeURIComponent(comp.searchQuery)}`}
+                            href={`https://www.pccomponentes.com/buscar/?query=${cleanSearchQuery(comp.searchQuery)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[9px] uppercase font-bold text-[#00FF66] underline decoration-2 underline-offset-4 hover:text-white transition-colors"
@@ -510,7 +514,7 @@ export default function App() {
                             PcComponentes
                           </a>
                           <a 
-                            href={`https://www.amazon.es/s?k=${encodeURIComponent(comp.searchQuery)}`}
+                            href={`https://www.amazon.es/s?k=${cleanSearchQuery(comp.searchQuery)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[9px] uppercase font-bold text-[#00FF66] underline decoration-2 underline-offset-4 hover:text-white transition-colors"
@@ -518,7 +522,7 @@ export default function App() {
                             Amazon
                           </a>
                           <a 
-                            href={`https://www.coolmod.com/buscar/?search=${encodeURIComponent(comp.searchQuery)}`}
+                            href={`https://www.coolmod.com/buscar/?search=${cleanSearchQuery(comp.searchQuery)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[9px] uppercase font-bold text-[#00FF66] underline decoration-2 underline-offset-4 hover:text-white transition-colors"
@@ -526,7 +530,7 @@ export default function App() {
                             Coolmod
                           </a>
                           <a 
-                            href={`https://www.wipoid.com/buscar?controller=search&s=${encodeURIComponent(comp.searchQuery)}`}
+                            href={`https://www.wipoid.com/buscar?controller=search&s=${cleanSearchQuery(comp.searchQuery)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[9px] uppercase font-bold text-[#00FF66] underline decoration-2 underline-offset-4 hover:text-white transition-colors"
