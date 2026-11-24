@@ -112,7 +112,20 @@ interface Candidate {
   score: number;
   cpu: Priced;
   gpu: Priced | null;
+  /** Avisos si alguna pieza no llega a lo pedido porque no hay otra con precio. */
+  notes: string[];
 }
+
+/** La más barata con al menos `min` GB; si no hay ninguna, la de más capacidad disponible. */
+function atLeast(list: Priced[], ok: (p: Priced) => boolean, min: number, color: RecommendRequest['color']): { pick?: Priced; short: boolean } {
+  const pick = cheapest(list, (p) => ok(p) && (p.item.capacityGB ?? 0) >= min, color);
+  if (pick) return { pick, short: false };
+  const pool = list.filter(ok);
+  if (!pool.length) return { short: false };
+  return { pick: pool.reduce((a, b) => ((b.item.capacityGB ?? 0) > (a.item.capacityGB ?? 0) || ((b.item.capacityGB ?? 0) === (a.item.capacityGB ?? 0) && b.price < a.price) ? b : a)), short: true };
+}
+
+const gbLabel = (gb: number) => (gb >= 1000 ? `${gb / 1000} TB` : `${gb} GB`);
 
 function pickPeripherals(catalog: CatalogItem[], prices: PriceSource, max: number, missing: Set<ComponentType>): Priced[] {
   const out: Priced[] = [];
@@ -166,8 +179,13 @@ function recommendDesktop(input: RecommendRequest, catalog: CatalogItem[], price
         missing.add('motherboard');
         continue;
       }
-      const ram = cheapest(lists.ram, (r) => r.item.specs.memoryType === board.item.specs.memoryType && (r.item.capacityGB ?? 0) >= ramMin, color);
-      const storage = cheapest(lists.storage, (s) => (s.item.capacityGB ?? 0) >= storageMin, color);
+      const ramPick = atLeast(lists.ram, (r) => r.item.specs.memoryType === board.item.specs.memoryType, ramMin, color);
+      const storagePick = atLeast(lists.storage, () => true, storageMin, color);
+      const ram = ramPick.pick;
+      const storage = storagePick.pick;
+      const notes: string[] = [];
+      if (ram && ramPick.short) notes.push(`No hay ahora mismo memoria de ${ramMin} GB con precio comprobado; se ha puesto ${gbLabel(ram.item.capacityGB ?? 0)}.`);
+      if (storage && storagePick.short) notes.push(`No hay ahora mismo un SSD de ${gbLabel(storageMin)} con precio comprobado; se ha puesto uno de ${gbLabel(storage.item.capacityGB ?? 0)}.`);
       const draw = (cpu.item.specs.tdpW ?? 150) + (gpu?.item.specs.tdpW ?? 0) + 75;
       const psuNeed = Math.ceil((draw * 1.3) / 50) * 50;
       const psu = cheapest(lists.psu, (p) => (p.item.specs.psuWatts ?? 0) >= psuNeed, color);
@@ -188,6 +206,7 @@ function recommendDesktop(input: RecommendRequest, catalog: CatalogItem[], price
         score: score(useCase, cpu.item, gpu?.item ?? null),
         cpu,
         gpu,
+        notes,
       });
     }
   }
@@ -196,8 +215,8 @@ function recommendDesktop(input: RecommendRequest, catalog: CatalogItem[], price
     const names = [...missing].map((t) => COMPONENT_LABELS[t].toLowerCase());
     if (!lists.cpu.length) names.unshift('procesadores');
     throw new Error(
-      `Todavía no hay precios comprobados de: ${[...new Set(names)].join(', ') || 'algunos componentes'}. ` +
-        'Los precios se están consultando en las tiendas; vuelve a intentarlo en unos minutos.',
+      `Ahora mismo no hay precios comprobados de: ${[...new Set(names)].join(', ') || 'algunos componentes'}. ` +
+        'Puede que la lectura de precios aún no haya terminado o que las tiendas que los venden no dejen consultarlos.',
     );
   }
 
@@ -265,6 +284,7 @@ function recommendDesktop(input: RecommendRequest, catalog: CatalogItem[], price
   if (overBudget) {
     warnings.push(`Con los precios actuales no hay ninguna configuración completa por debajo de ${eur(range.max)}. La más económica posible cuesta ${eur(total)}.`);
   }
+  warnings.push(...chosen.notes);
   const ramPart = parts.find((p) => p.item.type === 'ram');
   if (ramPart && ramPart.price / total > 0.25) {
     warnings.push(`La memoria RAM supone el ${Math.round((ramPart.price / total) * 100)} % del total: sus precios siguen muy altos por la escasez de DRAM.`);
@@ -298,7 +318,9 @@ function recommendLaptops(input: RecommendRequest, catalog: CatalogItem[], price
     }
   }
   if (!options.length) {
-    throw new Error('Todavía no hay precios comprobados de portátiles que cumplan lo pedido. Vuelve a intentarlo en unos minutos.');
+    throw new Error(
+      'Ahora mismo no hay portátiles con precio comprobado que cumplan lo pedido: las tiendas que los venden no dejan consultar sus precios desde el servidor. Prueba con Torre.',
+    );
   }
 
   const fitting = options.filter((o) => o.price <= max);

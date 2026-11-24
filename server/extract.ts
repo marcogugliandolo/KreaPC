@@ -211,6 +211,14 @@ export function extractProduct(html: string): ExtractedProduct {
 
 export { pageTitle };
 
+/**
+ * Ficha de un producto descatalogado: algunas tiendas (LDLC) siguen mostrando el "último precio",
+ * que no sirve porque ya no se puede comprar.
+ */
+export function isDiscontinuedPage(html: string): boolean {
+  return /ya no est(?:a|á|&aacute;) a la venta|no longer (?:on|for) sale|n['’]est plus (?:en vente|commercialis)/i.test(html);
+}
+
 /** Páginas de reto anti-bot (Cloudflare, captcha de Amazon…). */
 export function isBotChallenge(html: string): boolean {
   return /(cf-chl|challenge-platform|just a moment\.\.\.|attention required! \| cloudflare|captcha|robot check|validatecaptcha|px-captcha|datadome)/i.test(

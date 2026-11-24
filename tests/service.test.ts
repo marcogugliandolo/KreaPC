@@ -97,6 +97,41 @@ test('PriceService: si una tienda bloquea se conserva el último precio hasta qu
   assert.equal(svc.getPrices(item.id).offers.length, 0, 'caduca a las 48 h');
 });
 
+test('PriceService: una tienda que bloquea varias veces seguidas se deja de consultar un tiempo', async () => {
+  const blockedUrls = ['a', 'b', 'c', 'd', 'e'].map((x) => `https://www.coolmod.com/rtx-5070-${x}/`);
+  const item: CatalogItem = { ...testItem, seeds: [...blockedUrls, 'https://www.ldlc.com/es-es/ficha/PB00668553.html'], listings: [] };
+  const pages: Record<string, Page> = Object.fromEntries(blockedUrls.map((u) => [u, { status: 403 }]));
+  pages['https://www.ldlc.com/es-es/ficha/PB00668553.html'] = { status: 200, body: jsonLd('MSI GeForce RTX 5070 12G VENTUS 2X OC', 669.95) };
+  const calls: string[] = [];
+  let now = new Date('2026-11-24T10:00:00Z');
+  const svc = new PriceService([item], { fetchFn: fakeFetch(pages, calls), hostDelayMs: 0, file: null, now: () => now, storeBlockHours: 24 });
+  const report = await svc.refreshItem(item);
+
+  const coolmodCalls = () => calls.filter((u) => u.includes('coolmod.com/rtx')).length;
+  assert.equal(coolmodCalls(), 3, 'tras 3 bloqueos seguidos no se le piden más fichas');
+  assert.match(report.failures[blockedUrls[4]], /pausa/);
+  assert.deepEqual(report.offers.map((o) => [o.store, o.price]), [['LDLC', 669.95]]);
+
+  await svc.refreshItem(item);
+  assert.equal(coolmodCalls(), 3, 'sigue en pausa en la siguiente pasada');
+
+  now = new Date('2026-11-25T10:00:01Z');
+  await svc.refreshItem(item);
+  assert.ok(coolmodCalls() > 3, 'pasado el tiempo se vuelve a intentar');
+});
+
+test('PriceService: una ficha descatalogada no da precio aunque muestre el último', async () => {
+  const url = 'https://www.ldlc.com/es-es/ficha/PB00654317.html';
+  const item: CatalogItem = { ...testItem, seeds: [url], listings: [] };
+  const pages: Record<string, Page> = {
+    [url]: { status: 200, body: jsonLd('MSI GeForce RTX 5070 12G', 499, 'InStock') + '<p>Este producto ya no está a la venta permanentemente</p>' },
+  };
+  const svc = new PriceService([item], { fetchFn: fakeFetch(pages), hostDelayMs: 0, file: null });
+  const report = await svc.refreshItem(item);
+  assert.equal(report.offers.length, 0);
+  assert.match(report.failures[url], /ya no lo vende/);
+});
+
 /* ------------------------------- Motor ------------------------------------ */
 
 /** Precios simulados (precios orientativos de noviembre de 2026 vistos en las tiendas). */
@@ -183,6 +218,17 @@ test('motor: productividad sin gráfica dedicada y estética blanca respetada', 
   assert.ok(ids(r).includes('case-lancool-216-white') && ids(r).includes('psu-rm750e-white'));
 });
 
+test('motor: si falta la capacidad pedida usa la mayor disponible y lo avisa', () => {
+  const sin32: PriceSource = {
+    buyable: (id) => (id === 'ram-ddr5-32-6000' || id === 'ram-ddr5-32-6000-white' || id === 'ssd-sn7100-2tb' ? [] : fakePrices.buyable(id)),
+    allBuyable: fakePrices.allBuyable,
+  };
+  const r = recommend({ deviceType: 'Torre', useCase: 'Creación', budget: '1500€ - 2500€' }, CATALOG, sin32);
+  assert.ok(ids(r).includes('ram-ddr5-16-6000') && ids(r).includes('ssd-sn7100-1tb'), ids(r).join(','));
+  assert.ok(r.build.warnings.some((w) => /memoria de 32 GB/.test(w)));
+  assert.ok(r.build.warnings.some((w) => /SSD de 2 TB/.test(w)));
+});
+
 test('motor: portátiles ordenados por gráfica y RAM, el elegido dentro del presupuesto', () => {
   const r = recommend({ deviceType: 'Portátil', useCase: 'Gaming', budget: '800€ - 1500€' }, CATALOG, fakePrices);
   const laptops = r.build.components.filter((c) => c.type === 'laptop');
@@ -205,7 +251,7 @@ test('API: /api/recommend y /api/status', async () => {
     assert.equal(status.ready, false);
     const res = await fetch(`${base}/api/recommend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceType: 'Torre', useCase: 'Gaming', budget: '800€ - 1500€' }) });
     assert.equal(res.status, 503);
-    assert.match((await res.json()).error, /Todavía no hay precios/);
+    assert.match((await res.json()).error, /no hay precios comprobados/);
     const bad = await fetch(`${base}/api/prices/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ catalogId: 'nada' }) });
     assert.equal(bad.status, 400);
   } finally {
