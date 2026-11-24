@@ -4,7 +4,9 @@
  * - `match` / `exclude`: palabras que debe (o no puede) tener el nombre del producto en la
  *   tienda para aceptar su precio. Las que llevan números se buscan dentro del texto
  *   ("7800x3d"), el resto como palabra completa ("ti", "xt").
- * - `seeds`: fichas reales encontradas en las tiendas (noviembre de 2026).
+ * - `seeds`: fichas reales encontradas en las tiendas (noviembre de 2026). LDLC es la tienda
+ *   que permite leer sus fichas desde servidores; PcComponentes, Coolmod, Neobyte y Aussar
+ *   devuelven 403 (se reintentan una vez al día por si cambian).
  * - `listings`: páginas de categoría donde aparecen variantes del producto. Las marcadas como
  *   "patrón" siguen el formato de URL de la tienda pero no se han comprobado a mano;
  *   si no existen simplemente no aportan precios (ver `npm run catalog:check`).
@@ -146,6 +148,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: ['placa'],
     query: 'AMD Ryzen 7 9800X3D',
     seeds: [
+      LDLC('PB00650664'), LDLC('PB00664304'),
       'https://www.pccomponentes.com/procesador-amd-ryzen-7-9800x3d-47-52ghz',
       'https://www.pccomponentes.com/procesador-amd-ryzen-7-9800x3d-47-52ghz-tray',
       'https://www.coolmod.com/amd-ryzen-7-9800x3d-5-2ghz-socket-am5-boxed/',
@@ -191,6 +194,7 @@ export const CATALOG: CatalogItem[] = [
     match: ['ryzen', '9950x'],
     exclude: ['9950x3d', 'placa'],
     query: 'AMD Ryzen 9 9950X',
+    seeds: [LDLC('PB00622376'), LDLC('PB00718976')],
     reason: '16 núcleos Zen 5: para render, compilación y edición de vídeo.',
     specs: { socket: 'AM5', memoryType: 'DDR5', tdpW: 230, summary: '16 núcleos · 32 hilos · hasta 5,7 GHz' },
     igpu: true,
@@ -255,6 +259,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: ['ti', ...NOT_LAPTOP],
     query: 'RTX 5060 8GB',
     seeds: [
+      LDLC('PB00681084'), LDLC('PB00684439'), LDLC('PB00684415'), LDLC('PB00684427'), LDLC('PB00684414'), LDLC('PB00703193'), LDLC('PB00686247'), LDLC('PB00761339'), LDLC('PB00683081'),
       'https://www.pccomponentes.com/tarjeta-grafica-gigabyte-geforce-rtx-5060-windforce-oc-8gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.pccomponentes.com/tarjeta-grafica-msi-geforce-rtx-5060-ventus-2x-oc-8gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.pccomponentes.com/tarjeta-grafica-msi-geforce-rtx-5060-gaming-oc-8gb-gddr7-reflex-2-rtx-ai-dlss4',
@@ -302,6 +307,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: ['ti', ...NOT_LAPTOP],
     query: 'RTX 5070 12GB',
     seeds: [
+      LDLC('PB00668553'), LDLC('PB00669231'), LDLC('PB00668546'), LDLC('PB00671747'), LDLC('PB00669232'), LDLC('PB00684895'), LDLC('PB00669229'), LDLC('PB00702741'),
       'https://www.pccomponentes.com/tarjeta-grafica-gigabyte-geforce-rtx-5070-gaming-oc-12gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.pccomponentes.com/tarjeta-grafica-zotac-gaming-geforce-rtx-5070-solid-12gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.pccomponentes.com/tarjeta-grafica-pny-geforce-rtx-5070-overclocked-triple-fan-12gb-gddr7-reflex-2-rtx-ai-dlss4',
@@ -336,6 +342,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: NOT_LAPTOP,
     query: 'RX 9070 XT 16GB',
     seeds: [
+      LDLC('PB00671201'), LDLC('PB00671029'), LDLC('PB00671042'), LDLC('PB00671354'), LDLC('PB00671037'), LDLC('PB00671356'), LDLC('PB00671204'), LDLC('PB00738322'),
       'https://www.pccomponentes.com/tarjeta-grafica-asrock-steel-legend-amd-radeon-rx-9070-xt-16gb-gddr6-fsr-4',
       'https://www.pccomponentes.com/tarjeta-grafica-sapphire-pure-amd-radeon-rx-9070-xt-16gb-gddr6-fsr-4',
       'https://www.pccomponentes.com/tarjeta-grafica-asus-prime-amd-radeon-rx-9070-xt-oc-16gb-gddr6-fsr-4',
@@ -356,6 +363,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: NOT_LAPTOP,
     query: 'RTX 5070 Ti 16GB',
     seeds: [
+      LDLC('PB00666544'), LDLC('PB00666540'), LDLC('PB00666545'), LDLC('PB00666550'), LDLC('PB00666543'), LDLC('PB00695963'), LDLC('PB00675833'), LDLC('PB00674797'), LDLC('PB00702781'),
       'https://www.pccomponentes.com/tarjeta-grafica-msi-geforce-rtx-5070-ti-ventus-3x-oc-16gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.pccomponentes.com/tarjeta-grafica-gigabyte-geforce-rtx-5070-ti-gaming-oc-16gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.coolmod.com/msi-geforce-rtx-5070-ti-ventus-3x-oc-16gb-gddr7-dlss4/',
@@ -443,7 +451,8 @@ export const CATALOG: CatalogItem[] = [
     match: ['tuf', 'b850', 'plus'],
     exclude: ['b850m', 'pack'],
     query: 'ASUS TUF GAMING B850-PLUS WIFI',
-    seeds: ['https://www.coolmod.com/asus-tuf-gaming-b850-plus-wifi-socket-am5/'],
+    seeds: [
+      LDLC('PB00659304'),'https://www.coolmod.com/asus-tuf-gaming-b850-plus-wifi-socket-am5/'],
     reason: 'Placa robusta con WiFi 7 y buena refrigeración de VRM para CPUs de gama alta.',
     specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 7' },
   },
@@ -454,7 +463,8 @@ export const CATALOG: CatalogItem[] = [
     match: ['b850', 'tomahawk'],
     exclude: ['max', 'b850m'],
     query: 'MSI MAG B850 TOMAHAWK WIFI',
-    seeds: ['https://www.pccomponentes.com/placa-base-msi-mag-b850-tomahawk-wifi-am5-ddr5-atx-wifi-7-5g-lan-triple-m-2-pcie-5-0'],
+    seeds: [
+      LDLC('PB00712498'),'https://www.pccomponentes.com/placa-base-msi-mag-b850-tomahawk-wifi-am5-ddr5-atx-wifi-7-5g-lan-triple-m-2-pcie-5-0'],
     reason: 'B850 de gama alta: red de 5 Gb, WiFi 7 y tres M.2.',
     specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 7 · LAN 5G' },
   },
@@ -465,10 +475,66 @@ export const CATALOG: CatalogItem[] = [
     match: ['b850', 'steel', 'legend'],
     exclude: ['b850m'],
     query: 'ASRock B850 Steel Legend WIFI',
-    seeds: ['https://www.coolmod.com/asrock-b850-steel-legend-wifi-socket-am5/'],
+    seeds: [
+      LDLC('PB00760050'),'https://www.coolmod.com/asrock-b850-steel-legend-wifi-socket-am5/'],
     reason: 'B850 con estética blanca/plateada, ideal para montajes en blanco.',
     specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi' },
     color: 'blanco',
+  },
+  {
+    id: 'mb-asrock-b850-pro-rs-wifi',
+    type: 'motherboard',
+    name: 'ASRock B850 Pro RS WiFi',
+    match: ['b850', 'pro', 'rs'],
+    exclude: ['b850m'],
+    query: 'ASRock B850 Pro RS WiFi',
+    seeds: [LDLC('PB00760125')],
+    reason: 'B850 ATX con WiFi 6E y PCIe 5.0: de las más asequibles para AM5.',
+    specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 6E' },
+  },
+  {
+    id: 'mb-msi-pro-b850-p-wifi',
+    type: 'motherboard',
+    name: 'MSI PRO B850-P WIFI',
+    match: ['pro', 'b850', 'p', 'wifi'],
+    exclude: ['b850m', 'evo', 's'],
+    query: 'MSI PRO B850-P WIFI',
+    seeds: [LDLC('PB00659174')],
+    reason: 'B850 ATX con WiFi 7 y red de 5 Gb.',
+    specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 7' },
+  },
+  {
+    id: 'mb-asus-prime-b850-plus-wifi',
+    type: 'motherboard',
+    name: 'ASUS PRIME B850-PLUS WIFI',
+    match: ['prime', 'b850', 'plus'],
+    exclude: ['b850m'],
+    query: 'ASUS PRIME B850-PLUS WIFI',
+    seeds: [LDLC('PB00665922')],
+    reason: 'B850 ATX sencilla y fiable con WiFi 6E.',
+    specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 6E' },
+  },
+  {
+    id: 'mb-asus-tuf-b850-e-wifi',
+    type: 'motherboard',
+    name: 'ASUS TUF GAMING B850-E WIFI',
+    match: ['tuf', 'b850', 'e'],
+    exclude: ['b850m', 'plus'],
+    query: 'ASUS TUF GAMING B850-E WIFI',
+    seeds: [LDLC('PB00678147')],
+    reason: 'Placa TUF robusta con buena alimentación para CPUs de gama alta.',
+    specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 6E' },
+  },
+  {
+    id: 'mb-asrock-b850-riptide-wifi',
+    type: 'motherboard',
+    name: 'ASRock B850 Riptide WiFi',
+    match: ['b850', 'riptide'],
+    exclude: ['b850m'],
+    query: 'ASRock B850 Riptide WiFi',
+    seeds: [LDLC('PB00760049')],
+    reason: 'B850 ATX con WiFi 7 y PCIe 5.0 para gráfica y SSD.',
+    specs: { socket: 'AM5', memoryType: 'DDR5', formFactor: 'ATX', summary: 'AM5 · B850 · ATX · DDR5 · WiFi 7' },
   },
   {
     id: 'mb-b860-wifi',
@@ -491,6 +557,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: WHITE,
     query: 'Kingston FURY Beast 16GB 2x8GB DDR5 6000 CL30',
     seeds: [
+      LDLC('PB00654322'), LDLC('PB00654327'),
       'https://www.pccomponentes.com/memoria-ram-kingston-fury-beast-16gb-2x8gb-ddr5-6000mhz-cl30-amd-expo-negro',
       'https://www.pccomponentes.com/memoria-ram-kingston-fury-beast-rgb-16gb-2x8gb-ddr5-6000mhz-cl30-amd-expo-negro',
       'https://www.coolmod.com/kingston-fury-beast-16gb-2x8gb-6000mhz-cl30-expo-xmp/',
@@ -510,6 +577,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: WHITE,
     query: 'Kingston FURY Beast 32GB 2x16GB DDR5 6000 CL30',
     seeds: [
+      LDLC('PB00654376'),
       'https://www.coolmod.com/kingston-fury-beast-32gb-2x16gb-6000mhz-cl30-expo-xmp/',
       'https://www.coolmod.com/kingston-fury-beast-rgb-32gb-2x16gb-6000mhz-cl30-expo-xmp/',
       'https://www.neobyte.es/kingston-fury-beast-32gb-2x16gb-ddr5-6000mhz-cl30-memoria-ram-21314.html',
@@ -571,7 +639,8 @@ export const CATALOG: CatalogItem[] = [
     name: 'WD_BLACK SN7100 1 TB',
     match: ['sn7100', '1tb'],
     query: 'WD Black SN7100 1TB',
-    seeds: ['https://www.pccomponentes.com/disco-duro-wd-black-sn7100-1tb-disco-ssd-7250mb-s-nvme-pcie-4-0-m-2-gen4-tlc-3d-nand'], // patrón
+    seeds: [
+      LDLC('PB00714545'),'https://www.pccomponentes.com/disco-duro-wd-black-sn7100-1tb-disco-ssd-7250mb-s-nvme-pcie-4-0-m-2-gen4-tlc-3d-nand'], // patrón
     reason: '1 TB NVMe PCIe 4.0: espacio suficiente para el sistema y varios juegos.',
     specs: { summary: 'NVMe PCIe 4.0 · hasta 7.250 MB/s' },
     capacityGB: 1000,
@@ -632,6 +701,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: WHITE,
     query: 'Corsair RM750e',
     seeds: [
+      LDLC('PB00548773'),
       'https://www.coolmod.com/corsair-rm750e-2025-80-plus-gold-750w-atx-3-0-pcie-5-0-modular/',
       'https://www.coolmod.com/corsair-rm750e-80-plus-gold-750w-atx-3-0-pcie-5-0-modular/',
       'https://www.neobyte.es/corsair-rm750e-atx-30-80-gold-fuente-de-alimentacion-750w-17290.html',
@@ -662,6 +732,7 @@ export const CATALOG: CatalogItem[] = [
     match: ['rm850e'],
     exclude: WHITE,
     query: 'Corsair RM850e',
+    seeds: [LDLC('PB00663406'), LDLC('PB00548770')],
     reason: '850 W para gráficas de gama alta como la RTX 5080.',
     specs: { psuWatts: 850, summary: '850 W · 80 Plus Gold · modular · ATX 3.1' },
   },
@@ -685,6 +756,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: WHITE,
     query: 'Lian Li Lancool 216',
     seeds: [
+      LDLC('PB00532929'),
       'https://www.pccomponentes.com/torre-pc-lian-li-lancool-216-cristal-templado-usb-3-0-negra', // patrón
       'https://www.neobyte.es/lian-li-lancool-216-caja-eatx-17743.html',
       'https://www.neobyte.es/lian-li-lancool-216-rgb-caja-eatx-17739.html',
@@ -702,7 +774,8 @@ export const CATALOG: CatalogItem[] = [
     match: ['lancool', '216'],
     anyOf: WHITE,
     query: 'Lian Li Lancool 216 blanca',
-    seeds: ['https://wipoid.com/lian-li-lancool-216-rgb-blanca-e-atx.html', 'https://www.coolmod.com/lian-li-lancool-216-rgb-con-controlador-blanco/'],
+    seeds: [
+      LDLC('PB00532930'),'https://wipoid.com/lian-li-lancool-216-rgb-blanca-e-atx.html', 'https://www.coolmod.com/lian-li-lancool-216-rgb-con-controlador-blanco/'],
     reason: 'La misma caja en blanco.',
     specs: { formFactor: 'E-ATX, ATX, Micro-ATX, Mini-ITX', caseMaxGpuLengthMm: 392, summary: 'Semitorre · malla · blanca · GPU hasta 392 mm' },
     color: 'blanco',
@@ -717,6 +790,7 @@ export const CATALOG: CatalogItem[] = [
     exclude: [...WHITE, 'digital'],
     query: 'Thermalright Peerless Assassin 120 SE',
     seeds: [
+      LDLC('PB00581740'),
       'https://www.coolmod.com/thermalright-peerless-assassin-120-se-negro/',
       'https://www.coolmod.com/thermalright-peerless-assassin-120-se-argb-negro/',
       'https://www.pccomponentes.com/ventilador-cpu-refrigeracion-aire-thermalright-socket-am4-am5-lga1200-120mm-peerless-assassin-120-se-doble-torre-negro',
@@ -736,7 +810,8 @@ export const CATALOG: CatalogItem[] = [
     anyOf: WHITE,
     exclude: ['digital'],
     query: 'Thermalright Peerless Assassin 120 SE blanco',
-    seeds: ['https://www.coolmod.com/thermalright-peerless-assassin-120-se-argb-blanco/'],
+    seeds: [
+      LDLC('PB00581736'),'https://www.coolmod.com/thermalright-peerless-assassin-120-se-argb-blanco/'],
     reason: 'El mismo disipador en blanco.',
     specs: { summary: 'Doble torre · 2 × 120 mm · blanco' },
     coolerRatingW: 250,

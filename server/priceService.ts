@@ -12,7 +12,7 @@ import path from 'node:path';
 import type { Offer, PriceResult, PriceStatus } from '../shared/types';
 import type { CatalogItem } from './catalog';
 import { extractProductLinks, searchPages } from './discovery';
-import { extractProducts, isBotChallenge } from './extract';
+import { extractProducts, isBotChallenge, isDiscontinuedPage } from './extract';
 import { fetchStorePage, mapLimit, type FetchFn, type PageResult } from './http';
 import { matchesItem } from './matching';
 import { RobotsCache } from './robots';
@@ -32,8 +32,21 @@ export interface PriceServiceOptions {
   /** Fichero donde guardar los precios entre reinicios (null = no guardar). */
   file?: string | null;
   respectRobots?: boolean;
+  /** Horas que se deja de consultar una tienda que bloquea al servidor. */
+  storeBlockHours?: number;
   log?: (msg: string) => void;
 }
+
+interface StoreHealth {
+  /** Fallos seguidos (403, 429, reto anti-bot, sin respuesta…). */
+  strikes: number;
+  /** Hasta cuándo no se le vuelve a pedir nada (ms). */
+  pausedUntil?: number;
+}
+
+/** Bloqueos seguidos tras los que se deja de consultar una tienda durante un tiempo. */
+const STRIKES_TO_PAUSE = 3;
+const PAUSED = 'tienda en pausa';
 
 interface ItemState {
   offers: Record<string, Offer>;
@@ -77,6 +90,7 @@ export class PriceService {
   private timer: NodeJS.Timeout | null = null;
   private progress = { done: 0, total: 0 };
   private lastRefresh?: string;
+  private stores: Record<string, StoreHealth> = {};
   private readonly opts: Required<Omit<PriceServiceOptions, 'file' | 'log'>> & Pick<PriceServiceOptions, 'file' | 'log'>;
 
   constructor(private catalog: CatalogItem[], options: PriceServiceOptions = {}) {
@@ -88,6 +102,7 @@ export class PriceService {
       maxAgeHours: options.maxAgeHours ?? 48,
       hostDelayMs: options.hostDelayMs ?? 1500,
       respectRobots: options.respectRobots ?? true,
+      storeBlockHours: options.storeBlockHours ?? 24,
       file: options.file,
       log: options.log,
     };
@@ -180,7 +195,12 @@ export class PriceService {
         fallos: st?.failures ?? {},
       };
     });
-    return { estado: this.status(), tiendas: stores, productos: items };
+    const pausas = Object.fromEntries(
+      Object.entries(this.stores)
+        .filter(([, h]) => h.pausedUntil)
+        .map(([id, h]) => [id, new Date(h.pausedUntil!).toISOString()]),
+    );
+    return { estado: this.status(), tiendas: stores, tiendasEnPausaHasta: pausas, productos: items };
   }
 
   /* -------------------------------- Refresco -------------------------------- */
@@ -224,11 +244,15 @@ export class PriceService {
       const found = new Set<string>();
       await Promise.all(
         pages.map(async (page) => {
+          if (this.isPaused(page, now)) {
+            failures[page] = 'tienda en pausa: bloquea al servidor o no responde, se reintenta más tarde';
+            return;
+          }
           if (!(await this.allowed(page))) {
             failures[page] = 'no permitido por robots.txt';
             return;
           }
-          const res = await this.queue(page, () => fetchStorePage(page, { fetchFn: this.opts.fetchFn, expectProduct: false }));
+          const res = await this.fetchTracked(page, false);
           if (res.kind === 'ok') extractProductLinks(res.html, res.finalUrl, item).forEach((u) => found.add(u));
           else failures[page] = describe(res);
         }),
@@ -239,7 +263,10 @@ export class PriceService {
 
     // 2. Leer cada ficha conocida.
     const seeds = (item.seeds ?? []).map((u) => normalizeProductUrl(u)).filter((u): u is string => Boolean(u));
-    const urls = [...new Set([...seeds, ...st.discovered, ...Object.keys(st.offers)])].slice(0, MAX_URLS_PER_ITEM);
+    // Primero las tiendas que dejan leer sus fichas; las que bloquean se saltan un tiempo.
+    const all = [...new Set([...seeds, ...st.discovered, ...Object.keys(st.offers)])];
+    const urls = all.filter((u) => !this.isPaused(u, now)).slice(0, MAX_URLS_PER_ITEM);
+    for (const u of all) if (this.isPaused(u, now)) failures[u] = 'tienda en pausa: bloquea al servidor o no responde, se reintenta más tarde';
 
     await Promise.all(
       urls.map(async (url) => {
@@ -250,7 +277,12 @@ export class PriceService {
           delete st.offers[url];
           return;
         }
-        const res = await this.queue(url, () => fetchStorePage(url, { fetchFn: this.opts.fetchFn }));
+        // La comprobación va dentro de la cola: si la tienda se pausa mientras esperamos, no se le pide nada.
+        const res = await this.fetchTracked(url, true);
+        if (res.kind === 'error' && res.reason === PAUSED) {
+          failures[url] = 'tienda en pausa: bloquea al servidor o no responde, se reintenta más tarde';
+          return;
+        }
         if (res.kind === 'notfound') {
           failures[url] = describe(res);
           delete st.offers[url];
@@ -270,6 +302,11 @@ export class PriceService {
             failures[url] = 'la página no publica el precio en datos estructurados';
             delete st.offers[url];
           }
+          return;
+        }
+        if (isDiscontinuedPage(res.html)) {
+          failures[url] = 'la tienda ya no lo vende';
+          delete st.offers[url];
           return;
         }
         const slug = slugText(res.finalUrl);
@@ -303,6 +340,45 @@ export class PriceService {
 
   /* -------------------------------- Interno --------------------------------- */
 
+  /**
+   * Pide una página por la cola de su tienda y anota si la tienda responde.
+   * Todo ocurre dentro de la cola: si la tienda se pausa mientras esperamos turno, no se le pide nada.
+   * Bloqueos, cortes y tiempos de espera cuentan igual: una tienda que no responde no debe atascar la lectura.
+   */
+  private fetchTracked(url: string, expectProduct: boolean): Promise<PageResult> {
+    return this.queue(url, async () => {
+      if (this.isPaused(url, this.opts.now())) return { kind: 'error', reason: PAUSED } as PageResult;
+      const res = await fetchStorePage(url, { fetchFn: this.opts.fetchFn, expectProduct });
+      const storeId = identifyStore(url)?.id;
+      if (storeId) {
+        const challenge = expectProduct && res.kind === 'ok' && !extractProducts(res.html).length && isBotChallenge(res.html);
+        this.recordHealth(storeId, res.kind === 'blocked' || res.kind === 'error' || challenge);
+      }
+      return res;
+    });
+  }
+
+  private isPaused(url: string, now: Date): boolean {
+    const id = identifyStore(url)?.id;
+    const until = id ? this.stores[id]?.pausedUntil : undefined;
+    return Boolean(until && until > now.getTime());
+  }
+
+  /** Cuenta bloqueos seguidos; al llegar al límite la tienda se pausa (no insistimos si no quiere). */
+  private recordHealth(storeId: string, blocked: boolean) {
+    const h = (this.stores[storeId] ??= { strikes: 0 });
+    if (!blocked) {
+      h.strikes = 0;
+      h.pausedUntil = undefined;
+      return;
+    }
+    h.strikes++;
+    if (h.strikes >= STRIKES_TO_PAUSE && !h.pausedUntil) {
+      h.pausedUntil = this.opts.now().getTime() + this.opts.storeBlockHours * 3_600_000;
+      this.opts.log?.(`[precios] ${storeId} bloquea al servidor o no responde: en pausa ${this.opts.storeBlockHours} h`);
+    }
+  }
+
   private allowed(url: string): Promise<boolean> {
     return this.opts.respectRobots ? this.robots.allowed(url) : Promise.resolve(true);
   }
@@ -326,6 +402,7 @@ export class PriceService {
       if (data?.version === 1 && data.state) {
         this.state = data.state;
         this.lastRefresh = data.lastRefresh;
+        this.stores = data.stores ?? {};
       }
     } catch {
       /* primera ejecución */
@@ -336,7 +413,7 @@ export class PriceService {
     if (!this.opts.file) return;
     try {
       await fs.mkdir(path.dirname(this.opts.file), { recursive: true });
-      await fs.writeFile(this.opts.file, JSON.stringify({ version: 1, lastRefresh: this.lastRefresh, state: this.state }));
+      await fs.writeFile(this.opts.file, JSON.stringify({ version: 1, lastRefresh: this.lastRefresh, state: this.state, stores: this.stores }));
     } catch (err) {
       this.opts.log?.(`[precios] no se pudo guardar ${this.opts.file}: ${err}`);
     }
