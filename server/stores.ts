@@ -9,14 +9,18 @@ export interface Store {
   hosts: string[];
   /** Para dominios multipaís (ldlc.com, lenovo.com…): solo la sección de España. */
   pathPrefix?: RegExp;
+  /** Portada de la tienda en España (por defecto https://www.<dominio>/). */
+  home?: string;
 }
+
+export const storeHome = (s: Store) => s.home ?? `https://www.${s.hosts[0]}/`;
 
 export const STORES: Store[] = [
   { id: 'pccomponentes', name: 'PcComponentes', hosts: ['pccomponentes.com'] },
   { id: 'amazon', name: 'Amazon', hosts: ['amazon.es'] },
   { id: 'coolmod', name: 'Coolmod', hosts: ['coolmod.com'] },
   { id: 'wipoid', name: 'Wipoid', hosts: ['wipoid.com'] },
-  { id: 'ldlc', name: 'LDLC', hosts: ['ldlc.com'], pathPrefix: /^\/es-es\//i },
+  { id: 'ldlc', name: 'LDLC', hosts: ['ldlc.com'], pathPrefix: /^\/es-es\//i, home: 'https://www.ldlc.com/es-es/' },
   { id: 'neobyte', name: 'Neobyte', hosts: ['neobyte.es'] },
   { id: 'alternate', name: 'Alternate', hosts: ['alternate.es'] },
   { id: 'mediamarkt', name: 'MediaMarkt', hosts: ['mediamarkt.es'] },
@@ -30,10 +34,10 @@ export const STORES: Store[] = [
   { id: 'worten', name: 'Worten', hosts: ['worten.es'] },
   { id: 'vsgamers', name: 'VS Gamers', hosts: ['vsgamers.es'] },
   { id: 'carrefour', name: 'Carrefour', hosts: ['carrefour.es'] },
-  { id: 'lenovo', name: 'Lenovo', hosts: ['lenovo.com'], pathPrefix: /^\/es\//i },
-  { id: 'hp', name: 'HP Store', hosts: ['hp.com'], pathPrefix: /^\/es-es\//i },
-  { id: 'dell', name: 'Dell', hosts: ['dell.com'], pathPrefix: /^\/es-es\//i },
-  { id: 'apple', name: 'Apple', hosts: ['apple.com'], pathPrefix: /^\/es\//i },
+  { id: 'lenovo', name: 'Lenovo', hosts: ['lenovo.com'], pathPrefix: /^\/es\//i, home: 'https://www.lenovo.com/es/es/' },
+  { id: 'hp', name: 'HP Store', hosts: ['hp.com'], pathPrefix: /^\/es-es\//i, home: 'https://www.hp.com/es-es/home.html' },
+  { id: 'dell', name: 'Dell', hosts: ['dell.com'], pathPrefix: /^\/es-es\//i, home: 'https://www.dell.com/es-es' },
+  { id: 'apple', name: 'Apple', hosts: ['apple.com'], pathPrefix: /^\/es\//i, home: 'https://www.apple.com/es/' },
 ];
 
 const hostMatches = (host: string, h: string) => host === h || host.endsWith(`.${h}`);

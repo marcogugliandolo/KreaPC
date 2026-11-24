@@ -5,6 +5,8 @@
 
 export interface ExtractedProduct {
   title?: string;
+  /** Descripción corta (JSON-LD o meta). Solo se usa para portátiles, cuyo nombre a veces no lleva las specs. */
+  description?: string;
   price?: number;
   currency?: string;
   inStock: boolean | null;
@@ -134,8 +136,10 @@ function fromJsonLd(html: string): ExtractedProduct[] {
     const pool = available.length ? available : offers;
     const best = pool.reduce((a, b) => (b.price < a.price ? b : a));
     const anyStock = offers.some((o) => o.inStock === true) ? true : offers.every((o) => o.inStock === false) ? false : null;
+    const description = typeof p.description === 'string' ? p.description : metaContent(html, 'description') ?? metaContent(html, 'og:description');
     out.push({
       title: typeof p.name === 'string' ? decodeEntities(p.name).trim() : pageTitle(html),
+      description: description ? decodeEntities(description).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400) : undefined,
       price: best.price,
       currency: 'EUR',
       inStock: anyStock,

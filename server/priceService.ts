@@ -16,7 +16,7 @@ import { extractProducts, isBotChallenge, isDiscontinuedPage } from './extract';
 import { fetchStorePage, mapLimit, type FetchFn, type PageResult } from './http';
 import { matchesItem } from './matching';
 import { RobotsCache } from './robots';
-import { identifyStore, normalizeProductUrl, slugText } from './stores';
+import { identifyStore, normalizeProductUrl, slugText, STORES, storeHome } from './stores';
 
 export interface PriceServiceOptions {
   fetchFn?: FetchFn;
@@ -91,6 +91,8 @@ export class PriceService {
   private progress = { done: 0, total: 0 };
   private lastRefresh?: string;
   private stores: Record<string, StoreHealth> = {};
+  /** Si cada tienda deja leer su web al servidor (se comprueba la portada en cada pasada). */
+  private access: Record<string, { estado: string; comprobado: string }> = {};
   private readonly opts: Required<Omit<PriceServiceOptions, 'file' | 'log'>> & Pick<PriceServiceOptions, 'file' | 'log'>;
 
   constructor(private catalog: CatalogItem[], options: PriceServiceOptions = {}) {
@@ -200,7 +202,7 @@ export class PriceService {
         .filter(([, h]) => h.pausedUntil)
         .map(([id, h]) => [id, new Date(h.pausedUntil!).toISOString()]),
     );
-    return { estado: this.status(), tiendas: stores, tiendasEnPausaHasta: pausas, productos: items };
+    return { estado: this.status(), accesoTiendas: this.access, tiendas: stores, tiendasEnPausaHasta: pausas, productos: items };
   }
 
   /* -------------------------------- Refresco -------------------------------- */
@@ -210,6 +212,7 @@ export class PriceService {
     this.progress = { done: 0, total: this.catalog.length };
     this.running = (async () => {
       const started = Date.now();
+      const probing = this.probeStores().catch((err) => this.opts.log?.(`[precios] comprobación de tiendas: ${err}`));
       try {
         const reports = await mapLimit(this.catalog, 4, async (item) => {
           const r = await this.refreshItem(item).catch((err) => {
@@ -220,6 +223,7 @@ export class PriceService {
           if (this.progress.done % 5 === 0) await this.save(); // no perder lo leído si se reinicia
           return r;
         });
+        await probing;
         this.lastRefresh = this.opts.now().toISOString();
         await this.save();
         const ok = reports.filter((r) => r.offers.length).length;
@@ -311,7 +315,7 @@ export class PriceService {
         }
         const slug = slugText(res.finalUrl);
         const matching = products.filter(
-          (p) => p.price && p.price >= MIN_PRICE && p.price <= MAX_PRICE && matchesItem(item, `${p.title ?? ''} ${slug}`),
+          (p) => p.price && p.price >= MIN_PRICE && p.price <= MAX_PRICE && matchesItem(item, `${p.title ?? ''} ${slug}${item.laptop ? ` ${p.description ?? ''}` : ''}`),
         );
         if (!matching.length) {
           failures[url] = `es otro producto: "${products[0].title ?? 'sin nombre'}"`;
@@ -356,6 +360,34 @@ export class PriceService {
       }
       return res;
     });
+  }
+
+  /**
+   * Una petición a la portada de cada tienda para saber cuáles dejan leer su web desde este servidor.
+   * Va por la misma cola (y pausa) que el resto, así que no añade carga a quien bloquea.
+   */
+  async probeStores(): Promise<Record<string, { estado: string; comprobado: string }>> {
+    await Promise.all(
+      STORES.map(async (store) => {
+        const home = storeHome(store);
+        let estado: string;
+        if (this.isPaused(home, this.opts.now())) estado = 'en pausa: bloquea o no responde';
+        else if (!(await this.allowed(home))) estado = 'robots.txt no permite leerla';
+        else {
+          const res = await this.fetchTracked(home, false);
+          estado =
+            res.kind === 'ok'
+              ? isBotChallenge(res.html) ? 'bloquea (reto anti-bot)' : 'responde'
+              : res.kind === 'blocked'
+                ? `bloquea (HTTP ${res.status ?? '?'})`
+                : res.kind === 'notfound'
+                  ? 'responde (redirige)'
+                  : res.reason === PAUSED ? 'en pausa: bloquea o no responde' : `no responde (${res.reason})`;
+        }
+        this.access[store.id] = { estado, comprobado: this.opts.now().toISOString() };
+      }),
+    );
+    return this.access;
   }
 
   private isPaused(url: string, now: Date): boolean {
@@ -403,6 +435,7 @@ export class PriceService {
         this.state = data.state;
         this.lastRefresh = data.lastRefresh;
         this.stores = data.stores ?? {};
+        this.access = data.access ?? {};
       }
     } catch {
       /* primera ejecución */
@@ -413,7 +446,7 @@ export class PriceService {
     if (!this.opts.file) return;
     try {
       await fs.mkdir(path.dirname(this.opts.file), { recursive: true });
-      await fs.writeFile(this.opts.file, JSON.stringify({ version: 1, lastRefresh: this.lastRefresh, state: this.state, stores: this.stores }));
+      await fs.writeFile(this.opts.file, JSON.stringify({ version: 1, lastRefresh: this.lastRefresh, state: this.state, stores: this.stores, access: this.access }));
     } catch (err) {
       this.opts.log?.(`[precios] no se pudo guardar ${this.opts.file}: ${err}`);
     }
