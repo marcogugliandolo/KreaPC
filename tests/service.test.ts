@@ -132,6 +132,22 @@ test('PriceService: una ficha descatalogada no da precio aunque muestre el últi
   assert.match(report.failures[url], /ya no lo vende/);
 });
 
+test('PriceService: una tienda que no responde también se pausa y no atasca la lectura', async () => {
+  const urls = ['a', 'b', 'c', 'd'].map((x) => `https://www.neobyte.es/rtx-5070-${x}.html`);
+  const item: CatalogItem = { ...testItem, seeds: urls, listings: [] };
+  let product = 0;
+  const fetchFn = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/robots.txt')) return new Response('', { status: 404 });
+    if (url.includes('neobyte.es')) product++;
+    throw new Error('The operation was aborted due to timeout');
+  }) as typeof fetch;
+  const svc = new PriceService([item], { fetchFn, hostDelayMs: 0, file: null });
+  const report = await svc.refreshItem(item);
+  assert.equal(product, 3, 'su buscador y 2 fichas; las otras 2 ya no se piden');
+  assert.match(report.failures[urls[3]], /no responde/);
+});
+
 /* ------------------------------- Motor ------------------------------------ */
 
 /** Precios simulados (precios orientativos de noviembre de 2026 vistos en las tiendas). */

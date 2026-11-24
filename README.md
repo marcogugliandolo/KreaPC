@@ -8,7 +8,7 @@ Configurador de PC y portátiles con **precios reales de tiendas españolas**, e
 2. **Precios** (`server/priceService.ts`): el servidor lee cada ficha y saca el precio y el stock de sus datos estructurados (schema.org / JSON-LD), cada 6 horas.
    - Solo acepta el precio si el nombre del producto en la tienda es exactamente el modelo del catálogo (descarta variantes, packs y reacondicionados).
    - Si una ficha desaparece (404) o la tienda ya no vende el producto se borra; si una tienda bloquea un rato, se mantiene el último precio leído hasta 48 h.
-   - Si una tienda bloquea al servidor 3 veces seguidas (403, reto anti-bot) se deja de consultar 24 h y luego se reintenta. No se intenta saltar ningún bloqueo.
+   - Si una tienda bloquea al servidor o no responde 3 veces seguidas (403, reto anti-bot, tiempo de espera) se deja de consultar 24 h y luego se reintenta. No se intenta saltar ningún bloqueo.
    - Busca fichas nuevas en las páginas de categoría una vez al día.
    - Una petición a la vez por tienda, con pausa entre peticiones, y respeta `robots.txt`.
 3. **Recomendación** (`server/engine.ts`): prueba todas las combinaciones de CPU y GPU, completa cada una con las piezas compatibles más baratas que tienen precio y elige la de más rendimiento para el uso (gaming, productividad, creación, desarrollo) que cabe en el presupuesto. Si no cabe nada, lo dice y muestra la opción más económica posible.

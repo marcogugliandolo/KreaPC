@@ -38,7 +38,7 @@ export interface PriceServiceOptions {
 }
 
 interface StoreHealth {
-  /** Bloqueos seguidos (403, 429, reto anti-bot…). */
+  /** Fallos seguidos (403, 429, reto anti-bot, sin respuesta…). */
   strikes: number;
   /** Hasta cuándo no se le vuelve a pedir nada (ms). */
   pausedUntil?: number;
@@ -245,20 +245,14 @@ export class PriceService {
       await Promise.all(
         pages.map(async (page) => {
           if (this.isPaused(page, now)) {
-            failures[page] = 'tienda en pausa: bloquea al servidor, se reintenta más tarde';
+            failures[page] = 'tienda en pausa: bloquea al servidor o no responde, se reintenta más tarde';
             return;
           }
           if (!(await this.allowed(page))) {
             failures[page] = 'no permitido por robots.txt';
             return;
           }
-          const res = await this.queue(page, () =>
-            this.isPaused(page, this.opts.now())
-              ? Promise.resolve<PageResult>({ kind: 'error', reason: PAUSED })
-              : fetchStorePage(page, { fetchFn: this.opts.fetchFn, expectProduct: false }),
-          );
-          const pageStore = identifyStore(page);
-          if (pageStore && (res.kind === 'blocked' || res.kind === 'ok')) this.recordHealth(pageStore.id, res.kind === 'blocked');
+          const res = await this.fetchTracked(page, false);
           if (res.kind === 'ok') extractProductLinks(res.html, res.finalUrl, item).forEach((u) => found.add(u));
           else failures[page] = describe(res);
         }),
@@ -272,7 +266,7 @@ export class PriceService {
     // Primero las tiendas que dejan leer sus fichas; las que bloquean se saltan un tiempo.
     const all = [...new Set([...seeds, ...st.discovered, ...Object.keys(st.offers)])];
     const urls = all.filter((u) => !this.isPaused(u, now)).slice(0, MAX_URLS_PER_ITEM);
-    for (const u of all) if (this.isPaused(u, now)) failures[u] = 'tienda en pausa: bloquea al servidor, se reintenta más tarde';
+    for (const u of all) if (this.isPaused(u, now)) failures[u] = 'tienda en pausa: bloquea al servidor o no responde, se reintenta más tarde';
 
     await Promise.all(
       urls.map(async (url) => {
@@ -284,15 +278,10 @@ export class PriceService {
           return;
         }
         // La comprobación va dentro de la cola: si la tienda se pausa mientras esperamos, no se le pide nada.
-        const res = await this.queue(url, () =>
-          this.isPaused(url, this.opts.now()) ? Promise.resolve<PageResult>({ kind: 'error', reason: PAUSED }) : fetchStorePage(url, { fetchFn: this.opts.fetchFn }),
-        );
+        const res = await this.fetchTracked(url, true);
         if (res.kind === 'error' && res.reason === PAUSED) {
-          failures[url] = 'tienda en pausa: bloquea al servidor, se reintenta más tarde';
+          failures[url] = 'tienda en pausa: bloquea al servidor o no responde, se reintenta más tarde';
           return;
-        }
-        if (res.kind === 'blocked' || res.kind === 'ok') {
-          this.recordHealth(store.id, res.kind === 'blocked' || (!extractProducts(res.html).length && isBotChallenge(res.html)));
         }
         if (res.kind === 'notfound') {
           failures[url] = describe(res);
@@ -351,6 +340,24 @@ export class PriceService {
 
   /* -------------------------------- Interno --------------------------------- */
 
+  /**
+   * Pide una página por la cola de su tienda y anota si la tienda responde.
+   * Todo ocurre dentro de la cola: si la tienda se pausa mientras esperamos turno, no se le pide nada.
+   * Bloqueos, cortes y tiempos de espera cuentan igual: una tienda que no responde no debe atascar la lectura.
+   */
+  private fetchTracked(url: string, expectProduct: boolean): Promise<PageResult> {
+    return this.queue(url, async () => {
+      if (this.isPaused(url, this.opts.now())) return { kind: 'error', reason: PAUSED } as PageResult;
+      const res = await fetchStorePage(url, { fetchFn: this.opts.fetchFn, expectProduct });
+      const storeId = identifyStore(url)?.id;
+      if (storeId) {
+        const challenge = expectProduct && res.kind === 'ok' && !extractProducts(res.html).length && isBotChallenge(res.html);
+        this.recordHealth(storeId, res.kind === 'blocked' || res.kind === 'error' || challenge);
+      }
+      return res;
+    });
+  }
+
   private isPaused(url: string, now: Date): boolean {
     const id = identifyStore(url)?.id;
     const until = id ? this.stores[id]?.pausedUntil : undefined;
@@ -368,7 +375,7 @@ export class PriceService {
     h.strikes++;
     if (h.strikes >= STRIKES_TO_PAUSE && !h.pausedUntil) {
       h.pausedUntil = this.opts.now().getTime() + this.opts.storeBlockHours * 3_600_000;
-      this.opts.log?.(`[precios] ${storeId} bloquea al servidor: en pausa ${this.opts.storeBlockHours} h`);
+      this.opts.log?.(`[precios] ${storeId} bloquea al servidor o no responde: en pausa ${this.opts.storeBlockHours} h`);
     }
   }
 
