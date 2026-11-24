@@ -3,87 +3,61 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useMemo, useRef, useState } from 'react';
-import { FileDown, Loader2, RotateCcw } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileDown, Loader2, RotateCcw, TriangleAlert } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { bestOffer, checkCompatibility } from '../shared/compat';
-import type { Build, PriceResult, RecommendRequest, StreamEvent } from '../shared/types';
-import { ComponentCard, type PriceState } from './components/ComponentCard';
+import type { Build, PriceResult, PriceStatus, RecommendRequest } from '../shared/types';
+import { ComponentCard } from './components/ComponentCard';
 import { Sidebar, type Totals } from './components/Sidebar';
 import { DEFAULT_FORM, Wizard } from './components/Wizard';
-import { refreshPrices, streamRecommendation } from './lib/api';
+import { getRecommendation, getStatus, refreshPrices } from './lib/api';
 import { eur } from './lib/format';
 
 export default function App() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<RecommendRequest>(DEFAULT_FORM);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [build, setBuild] = useState<Build | null>(null);
-  const [prices, setPrices] = useState<Record<string, PriceState>>({});
+  const [prices, setPrices] = useState<Record<string, PriceResult>>({});
   const [refreshing, setRefreshing] = useState<Record<string, boolean>>({});
   const [mainLaptopId, setMainLaptopId] = useState<string | null>(null);
   const [pdfDone, setPdfDone] = useState(false);
+  const [status, setStatus] = useState<PriceStatus | null>(null);
 
-  const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const handleEvent = (ev: StreamEvent) => {
-    switch (ev.type) {
-      case 'status':
-        setStatus(ev.message);
-        break;
-      case 'build':
-        setBuild(ev.build);
-        setMainLaptopId(ev.build.components.find((c) => c.type === 'laptop')?.id ?? null);
-        setPrices(Object.fromEntries(ev.build.components.map((c) => [c.id, 'loading' as const])));
-        setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-        break;
-      case 'prices':
-        setPrices((p) => ({ ...p, [ev.componentId]: ev.result }));
-        break;
-      case 'error':
-        setError(ev.error);
-        break;
-      case 'done':
-        setStatus('');
-        break;
-    }
-  };
+  // Mientras el servidor lee precios en las tiendas, mostramos el progreso.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      const s = await getStatus();
+      setStatus(s);
+      if (s && (!s.ready || s.refreshing)) timer = setTimeout(poll, 5000);
+    };
+    poll();
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async () => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
     setError('');
-    setStatus('Conectando…');
-    setBuild(null);
-    setPrices({});
     try {
-      await streamRecommendation(form, handleEvent, ctrl.signal);
+      const res = await getRecommendation(form);
+      setBuild(res.build);
+      setPrices(res.prices);
+      setMainLaptopId(res.build.components.find((c) => c.type === 'laptop')?.id ?? null);
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError(err?.message || 'Hubo un problema de conexión. Inténtalo de nuevo.');
+      setBuild(null);
+      setError(err?.message || 'Hubo un problema de conexión. Inténtalo de nuevo.');
     } finally {
-      if (abortRef.current === ctrl) {
-        setLoading(false);
-        setStatus('');
-        // Lo que no llegó a tener precio deja de mostrarse como "buscando".
-        setPrices((p) =>
-          Object.fromEntries(
-            Object.entries(p).map(([id, v]) => [
-              id,
-              v === 'loading' ? ({ offers: [], checkedAt: new Date().toISOString(), queries: [], fromCache: false, error: 'No se pudo completar la búsqueda de precios.' } as PriceResult) : v,
-            ]),
-          ),
-        );
-      }
+      setLoading(false);
     }
   };
 
   const reset = () => {
-    abortRef.current?.abort();
     setBuild(null);
     setPrices({});
     setError('');
@@ -104,7 +78,8 @@ export default function App() {
     if (!c) return;
     setRefreshing((r) => ({ ...r, [id]: true }));
     try {
-      const result = await refreshPrices(c);
+      const url = c.type === 'laptop' ? prices[id]?.offers[0]?.url : undefined;
+      const result = await refreshPrices(c, url);
       setPrices((p) => ({ ...p, [id]: result }));
     } catch (err: any) {
       setError(err?.message || 'No se pudieron actualizar los precios.');
@@ -113,7 +88,7 @@ export default function App() {
     }
   };
 
-  // Componentes que suman: en portátiles solo cuenta el elegido (más periféricos).
+  // En portátiles solo suma el elegido (y los periféricos).
   const { counted, alternatives } = useMemo(() => {
     const comps = build?.components ?? [];
     return {
@@ -123,22 +98,16 @@ export default function App() {
   }, [build, mainLaptopId]);
 
   const totals: Totals = useMemo(() => {
-    const t: Totals = { total: 0, counted: counted.length, priced: 0, pending: 0, missing: 0, missingEstimate: 0, verified: 0 };
+    const t: Totals = { total: 0, counted: counted.length, priced: 0, missing: 0 };
     for (const c of counted) {
-      const p = prices[c.id];
-      if (p === 'loading' || p === undefined) {
-        t.pending++;
+      const best = bestOffer(prices[c.id]?.offers);
+      if (!best) {
+        t.missing++;
         continue;
       }
-      const best = bestOffer(p.offers);
-      if (best) {
-        t.total += best.price;
-        t.priced++;
-        if (best.status === 'verified') t.verified++;
-      } else {
-        t.missing++;
-        t.missingEstimate += c.estimatedPrice;
-      }
+      t.total += best.price;
+      t.priced++;
+      if (!t.oldestCheck || best.checkedAt < t.oldestCheck) t.oldestCheck = best.checkedAt;
     }
     t.total = Math.round(t.total * 100) / 100;
     return t;
@@ -149,20 +118,13 @@ export default function App() {
   const handleExportPDF = async () => {
     if (!build) return;
     const { exportBuildPdf } = await import('./lib/pdf'); // jsPDF solo se descarga al exportar
-    exportBuildPdf({
-      build,
-      counted,
-      alternatives,
-      prices: prices as Record<string, PriceResult | 'loading' | undefined>,
-      total: totals.total,
-      partial: totals.missing + totals.pending > 0,
-    });
+    exportBuildPdf({ build, counted, alternatives, prices, total: totals.total, partial: totals.missing > 0 });
     setPdfDone(true);
     setTimeout(() => setPdfDone(false), 2000);
   };
 
-  // Orden: el portátil elegido primero, luego alternativas, luego el resto.
   const ordered = build ? [...counted.filter((c) => c.type === 'laptop'), ...alternatives, ...counted.filter((c) => c.type !== 'laptop')] : [];
+  const warming = Boolean(status && !status.ready);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00FF66] selection:text-black">
@@ -173,24 +135,24 @@ export default function App() {
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00FF66] font-bold mt-1">Motor de Selección de Alto Rendimiento</p>
           </div>
           <div className="text-right hidden md:block">
-            <p className="text-[10px] uppercase tracking-[0.2em] opacity-50">{build ? 'Total con precios reales' : 'Precios en tiempo real'}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] opacity-50">{build ? 'Total con precios reales' : 'Precios de tiendas españolas'}</p>
             <p className="text-5xl font-black font-mono text-[#00FF66]">{build ? eur(totals.total) : '—'}</p>
           </div>
         </header>
 
+        {status && (warming || status.refreshing) && (
+          <div className="mb-6 flex items-center gap-3 text-xs font-mono uppercase tracking-widest text-white/60 border border-white/10 px-4 py-3 bg-white/[0.03]">
+            <Loader2 className="w-4 h-4 animate-spin text-[#00FF66] shrink-0" />
+            {warming
+              ? `Leyendo precios en las tiendas por primera vez (${status.progress.done}/${status.progress.total} productos)…`
+              : `Actualizando precios en segundo plano (${status.progress.done}/${status.progress.total})`}
+          </div>
+        )}
+
         <div className="mb-12">
           <h2 className="text-xs uppercase tracking-widest font-bold text-white/40 mb-4">00 / Configuración Inicial</h2>
           <Wizard form={form} setForm={setForm} step={step} setStep={setStep} loading={loading} onSubmit={handleSubmit} />
-
-          <AnimatePresence>
-            {loading && status && (
-              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex items-center gap-3 mt-4 px-1 text-xs font-mono uppercase tracking-widest text-white/60">
-                <Loader2 className="w-4 h-4 animate-spin text-[#00FF66]" />
-                {status}
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {error && <p className="text-red-400 mt-4 text-xs font-mono uppercase px-1">{error}</p>}
+          {error && <p className="text-red-400 mt-4 text-xs font-mono uppercase px-1 leading-relaxed">{error}</p>}
         </div>
 
         <AnimatePresence>
@@ -208,14 +170,18 @@ export default function App() {
               <section className="flex-1 flex flex-col min-w-0">
                 <div className="flex justify-between items-end mb-6 gap-4">
                   <h2 className="text-xs uppercase tracking-widest font-bold text-white/40">{checks.length ? '04' : '03'} / Componentes y tiendas</h2>
-                  <p className="text-[10px] uppercase tracking-widest text-white/40 text-right">
-                    {totals.pending > 0 ? (
-                      <span className="text-[#00FF66]">Consultando tiendas…</span>
-                    ) : (
-                      <>Precios de tiendas españolas</>
-                    )}
-                  </p>
+                  <p className="text-[10px] uppercase tracking-widest text-white/40 text-right">Precios de tiendas españolas</p>
                 </div>
+
+                {build.warnings.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    {build.warnings.map((w) => (
+                      <p key={w} className={`flex gap-2 text-xs leading-relaxed p-3 border ${build.overBudget ? 'border-red-400/40 text-red-300' : 'border-amber-300/30 text-amber-200/90'}`}>
+                        <TriangleAlert className="w-4 h-4 shrink-0 mt-px" /> {w}
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex-1 space-y-3">
                   {ordered.map((c, idx) => (
@@ -237,11 +203,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleExportPDF}
-                    disabled={totals.pending > 0}
-                    className="flex-1 bg-white text-black py-5 px-8 font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#00FF66] transition-colors disabled:opacity-40 disabled:hover:bg-white"
+                    className="flex-1 bg-white text-black py-5 px-8 font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#00FF66] transition-colors"
                   >
                     <FileDown className="w-5 h-5" />
-                    {pdfDone ? 'PDF Generado' : totals.pending > 0 ? 'Esperando precios…' : 'Exportar PDF'}
+                    {pdfDone ? 'PDF Generado' : 'Exportar PDF'}
                   </button>
                   <button type="button" onClick={reset} className="px-10 py-5 border border-white/20 font-bold uppercase tracking-widest hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
                     <RotateCcw className="w-4 h-4" /> Nueva Búsqueda

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { RecommendRequest } from '../../shared/types';
+import type { ColorPref, RecommendRequest } from '../../shared/types';
 
 export const DEFAULT_FORM: RecommendRequest = {
   deviceType: 'Torre',
@@ -10,7 +10,7 @@ export const DEFAULT_FORM: RecommendRequest = {
   ram: 'Cualquiera',
   storage: 'Cualquiera',
   vram: 'Cualquiera',
-  extraDetails: '',
+  color: 'Indiferente',
   includePeripherals: false,
 };
 
@@ -191,15 +191,21 @@ export function Wizard({
             }}
             className="flex flex-col gap-4"
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { key: 'ram' as const, label: 'Memoria RAM', options: ['Cualquiera', '16GB', '32GB', '64GB'] },
                 { key: 'storage' as const, label: 'Almacenamiento', options: ['Cualquiera', '500GB', '1TB', '2TB', '4TB+'] },
-                { key: 'vram' as const, label: 'VRAM (Gráfica)', options: ['Cualquiera', '8GB', '12GB', '16GB', '24GB'] },
+                { key: 'vram' as const, label: 'VRAM (Gráfica)', options: ['Cualquiera', '8GB', '12GB', '16GB', '32GB'] },
+                { key: 'color' as const, label: 'Estética', options: ['Indiferente', 'Negro', 'Blanco'] },
               ].map((f) => (
                 <div key={f.key} className="flex flex-col gap-2">
                   <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">{f.label}</label>
-                  <CustomSelect value={form[f.key] ?? 'Cualquiera'} onChange={(val) => setForm({ ...form, [f.key]: val })} options={f.options} disabled={loading} />
+                  <CustomSelect
+                    value={(form[f.key] as string | undefined) ?? f.options[0]}
+                    onChange={(val) => setForm({ ...form, [f.key]: f.key === 'color' ? (val as ColorPref) : val })}
+                    options={f.options}
+                    disabled={loading || (f.key === 'color' && form.deviceType === 'Portátil')}
+                  />
                 </div>
               ))}
             </div>
@@ -216,17 +222,9 @@ export function Wizard({
               </div>
               <span className="text-sm font-bold uppercase tracking-widest text-white/80 group-hover:text-white transition-colors">Incluir Periféricos (Monitor, Teclado, Ratón)</span>
             </label>
-            <textarea
-              value={form.extraDetails}
-              onChange={(e) => setForm({ ...form, extraDetails: e.target.value })}
-              maxLength={500}
-              placeholder="Ej: Prefiero estética blanca, necesito mucho almacenamiento, tamaño compacto, pantalla OLED..."
-              className="w-full bg-white/5 border border-white/10 text-white p-4 font-mono text-sm placeholder-white/40 focus:outline-none focus:border-[#00FF66] resize-none h-24"
-              disabled={loading}
-            />
             <div className="flex flex-col-reverse md:flex-row md:items-center justify-between gap-4">
               <p className="text-[10px] uppercase tracking-widest text-white/40 font-mono">
-                Componentes y precios consultados en directo en Google y en las tiendas
+                Precios leídos directamente de las fichas de las tiendas · rendimiento según Tom's Hardware
               </p>
               <button
                 type="submit"

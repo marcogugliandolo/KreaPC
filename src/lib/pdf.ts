@@ -1,15 +1,14 @@
 import { jsPDF } from 'jspdf';
 import { bestOffer } from '../../shared/compat';
 import { COMPONENT_LABELS, type Build, type BuildComponent, type PriceResult } from '../../shared/types';
-import { dateTimeOf, eur, eurRound } from './format';
+import { dateTimeOf, eur } from './format';
 
-const statusLabel = (s: 'verified' | 'google') => (s === 'verified' ? 'verificado en tienda' : 'precio en Google');
 
 export function exportBuildPdf(opts: {
   build: Build;
   counted: BuildComponent[];
   alternatives: BuildComponent[];
-  prices: Record<string, PriceResult | 'loading' | undefined>;
+  prices: Record<string, PriceResult | undefined>;
   total: number;
   partial: boolean;
 }) {
@@ -58,9 +57,10 @@ export function exportBuildPdf(opts: {
 
   const drawComponent = (c: BuildComponent) => {
     const result = prices[c.id];
-    const offers = typeof result === 'object' ? result.offers : [];
+    const offers = result?.offers ?? [];
     const best = bestOffer(offers);
     const nameLines = doc.splitTextToSize(c.name, W - 2 * M - 40);
+    const skuLines = best?.title && best.title !== c.name ? doc.splitTextToSize(best.title, W - 2 * M - 40) : [];
     ensure(14 + nameLines.length * 5 + (offers.length > 1 ? 5 : 0));
 
     doc.setFontSize(8);
@@ -77,12 +77,19 @@ export function exportBuildPdf(opts: {
     doc.setTextColor(20, 20, 20);
     doc.text(nameLines, M, y);
     y += nameLines.length * 5;
+    if (skuLines.length) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(110, 110, 110);
+      doc.text(skuLines, M, y);
+      y += skuLines.length * 4;
+    }
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     if (best) {
       doc.setTextColor(0, 140, 60);
-      const label = `${best.store} (${statusLabel(best.status)}) - ver en la tienda`;
+      const label = `${best.store} - ver en la tienda`;
       doc.textWithLink(label, M, y, { url: best.url });
       y += 4.5;
       const others = offers.filter((o) => o !== best).slice(0, 4);
@@ -93,7 +100,7 @@ export function exportBuildPdf(opts: {
       }
     } else {
       doc.setTextColor(180, 120, 0);
-      doc.text(`Sin precio fiable${c.estimatedPrice ? ` (estimación IA ~${eurRound(c.estimatedPrice)})` : ''}`, M, y);
+      doc.text('Sin precio comprobado en el momento de la consulta', M, y);
       y += 4.5;
     }
     y += 3;
@@ -133,7 +140,7 @@ export function exportBuildPdf(opts: {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(130, 130, 130);
   const note = doc.splitTextToSize(
-    '"Verificado en tienda": precio leído de la ficha del producto en el momento de la consulta. "Precio en Google": precio que muestra Google para esa ficha (la tienda no permite leerla). Los precios y el stock pueden cambiar en cualquier momento.',
+    'Precios leídos directamente de la ficha de cada producto en la tienda (datos estructurados schema.org). Rendimiento según Tom\'s Hardware. Los precios y el stock pueden cambiar en cualquier momento.',
     W - 2 * M,
   );
   doc.text(note, M, y);

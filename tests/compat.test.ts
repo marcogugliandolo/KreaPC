@@ -5,10 +5,10 @@ import type { BuildComponent, ComponentType, Offer } from '../shared/types';
 
 const c = (type: ComponentType, specs: BuildComponent['specs'] = {}): BuildComponent => ({
   id: type,
+  catalogId: type,
   type,
   name: type,
   searchQuery: type,
-  estimatedPrice: 100,
   specs,
 });
 
@@ -61,7 +61,7 @@ test('formatos de placa', () => {
 });
 
 test('mejor oferta prioriza stock y presupuesto se interpreta bien', () => {
-  const o = (price: number, inStock: boolean | null): Offer => ({ storeId: String(price), store: 's', url: 'u', price, currency: 'EUR', inStock, status: 'verified', checkedAt: '' });
+  const o = (price: number, inStock: boolean | null): Offer => ({ storeId: String(price), store: 's', url: 'u', price, currency: 'EUR', inStock, checkedAt: '' });
   assert.equal(bestOffer([o(100, false), o(120, true), o(130, null)])?.price, 120);
   assert.equal(bestOffer([o(100, false), o(90, false)])?.price, 90);
   assert.equal(bestOffer([]), undefined);
@@ -70,19 +70,3 @@ test('mejor oferta prioriza stock y presupuesto se interpreta bien', () => {
   assert.deepEqual(parseBudget('> 2500€'), { min: 2500 });
 });
 
-import { normalizeComponents } from '../server/recommend';
-
-test('portátil: máximo 3 modelos, sin piezas de torre y periféricos solo si se piden', () => {
-  const raw = [
-    { type: 'laptop', name: 'ASUS TUF Gaming A15 FA507NV', estimatedPrice: 999 },
-    { type: 'cpu', name: 'AMD Ryzen 7 7800X3D' },
-    { type: 'laptop', name: 'Lenovo LOQ 15IRX9' },
-    { type: 'laptop', name: 'MSI Thin 15 B13VE' },
-    { type: 'laptop', name: 'HP Victus 16' },
-    { type: 'mouse', name: 'Logitech G305' },
-    { type: 'laptop', name: '' },
-  ];
-  const base = { deviceType: 'Portátil' as const, useCase: 'Gaming', budget: '800€ - 1500€' };
-  assert.deepEqual(normalizeComponents(raw, base).map((c) => c.id), ['laptop-1', 'laptop-2', 'laptop-3']);
-  assert.deepEqual(normalizeComponents(raw, { ...base, includePeripherals: true }).map((c) => c.id), ['laptop-1', 'laptop-2', 'laptop-3', 'mouse-1']);
-});

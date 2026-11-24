@@ -1,18 +1,16 @@
-import { useState, type ReactNode } from 'react';
-import { ChevronDown, CircleAlert, CircleCheck, CircleDashed, CircleX, ExternalLink, Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { CircleAlert, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
 import { parseBudget, type CheckStatus, type CompatCheck } from '../../shared/compat';
 import type { Build } from '../../shared/types';
-import { eur, eurRound, hostOf } from '../lib/format';
-import { GoogleSuggestions } from './GoogleSuggestions';
+import { ago, eur } from '../lib/format';
 
 export interface Totals {
   total: number;
   counted: number;
   priced: number;
-  pending: number;
   missing: number;
-  missingEstimate: number;
-  verified: number;
+  /** Fecha de la comprobación más antigua entre los precios usados. */
+  oldestCheck?: string;
 }
 
 const CHECK_ICON: Record<CheckStatus, { Icon: typeof CircleCheck; cls: string }> = {
@@ -27,7 +25,6 @@ function SectionTitle({ children }: { children: ReactNode }) {
 }
 
 export function Sidebar({ build, checks, totals }: { build: Build; checks: CompatCheck[]; totals: Totals }) {
-  const [showSources, setShowSources] = useState(false);
   const range = parseBudget(build.budget);
   const over = range.max !== undefined ? totals.total - range.max : 0;
   const fill = range.max ? Math.min(100, (totals.total / range.max) * 100) : 0;
@@ -37,33 +34,12 @@ export function Sidebar({ build, checks, totals }: { build: Build; checks: Compa
   return (
     <aside className="w-full md:w-80 flex flex-col gap-8 shrink-0">
       <section>
-        <SectionTitle>01 / Análisis de la IA</SectionTitle>
+        <SectionTitle>01 / Por qué esta configuración</SectionTitle>
         <div className="bg-white/5 p-6 border border-white/5 space-y-4">
           <p className="text-sm leading-relaxed text-white/80">{build.explanation}</p>
-          <GoogleSuggestions html={build.searchSuggestionsHtml} />
-          {build.sources.length > 0 && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowSources(!showSources)}
-                className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-white/50 hover:text-[#00FF66] transition-colors"
-              >
-                Fuentes consultadas ({build.sources.length})
-                <ChevronDown className={`w-3 h-3 transition-transform ${showSources ? 'rotate-180' : ''}`} />
-              </button>
-              {showSources && (
-                <ul className="mt-2 space-y-1">
-                  {build.sources.map((s) => (
-                    <li key={s.url}>
-                      <a href={s.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 text-xs font-mono text-white/60 hover:text-[#00FF66] break-all">
-                        <ExternalLink className="w-3 h-3 shrink-0" /> {hostOf(s.url)}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+          <p className="text-[10px] font-mono text-white/30">
+            Elegido por reglas con datos reales: rendimiento de Tom's Hardware y precios leídos de las tiendas. Sin IA.
+          </p>
         </div>
       </section>
 
@@ -97,7 +73,7 @@ export function Sidebar({ build, checks, totals }: { build: Build; checks: Compa
         <SectionTitle>{checks.length > 0 ? '03' : '02'} / Presupuesto</SectionTitle>
         <div className="border border-white/10 p-6 bg-[#080808] space-y-4">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">{totals.missing || totals.pending ? 'Total parcial (precios reales)' : 'Total con precios reales'}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">{totals.missing ? 'Total parcial (precios reales)' : 'Total con precios reales'}</p>
             <p className="text-4xl font-black font-mono text-[#00FF66] leading-tight">{eur(totals.total)}</p>
           </div>
 
@@ -105,7 +81,7 @@ export function Sidebar({ build, checks, totals }: { build: Build; checks: Compa
             <div className="space-y-2">
               <div className="flex justify-between text-[10px] uppercase font-bold tracking-widest">
                 <span className="text-white/50">Objetivo {build.budget}</span>
-                <span className={over > 0 ? 'text-red-400' : 'text-[#00FF66]'}>{over > 0 ? `+${eurRound(over)}` : 'Dentro'}</span>
+                <span className={over > 0 ? 'text-red-400' : 'text-[#00FF66]'}>{over > 0 ? `+${eur(over)}` : 'Dentro'}</span>
               </div>
               <div className="h-1 bg-white/10 w-full">
                 <div className={`h-full transition-all duration-700 ${over > 0 ? 'bg-red-400' : 'bg-[#00FF66]'}`} style={{ width: `${fill}%` }} />
@@ -115,19 +91,10 @@ export function Sidebar({ build, checks, totals }: { build: Build; checks: Compa
 
           <ul className="text-xs font-mono text-white/50 space-y-1">
             <li>
-              {totals.priced}/{totals.counted} componentes con precio real
-              {totals.verified > 0 && ` · ${totals.verified} verificados en tienda`}
+              {totals.priced}/{totals.counted} componentes con precio comprobado
             </li>
-            {totals.pending > 0 && (
-              <li className="flex items-center gap-2 text-white/60">
-                <Loader2 className="w-3 h-3 animate-spin" /> {totals.pending} buscando precio…
-              </li>
-            )}
-            {totals.missing > 0 && (
-              <li className="text-amber-300/80">
-                {totals.missing} sin precio fiable{totals.missingEstimate > 0 && ` (estimación IA ~${eurRound(totals.missingEstimate)})`}
-              </li>
-            )}
+            {totals.oldestCheck && <li>Precios leídos {ago(totals.oldestCheck)} o más recientes</li>}
+            {totals.missing > 0 && <li className="text-amber-300/80">{totals.missing} sin precio ahora mismo (no suman)</li>}
           </ul>
         </div>
       </section>

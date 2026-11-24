@@ -1,6 +1,5 @@
 {
   "name": "KreaPC",
-  "description": "Configurador de PC potenciado por IA que te ayuda a armar la máquina perfecta para tus necesidades con presupuestos en tiempo real.",
-  "requestFramePermissions": ["clipboard-write"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "Configurador de PC y portátiles con precios reales de tiendas españolas, compatibilidad comprobada y rendimiento según benchmarks.",
+  "requestFramePermissions": ["clipboard-write"]
 }

@@ -1,25 +1,23 @@
 # KreaPC
 
-Configurador de PC y portátiles con IA que te da **componentes actuales y precios reales de tiendas españolas**, con enlace directo a la ficha de cada producto.
+Configurador de PC y portátiles con **precios reales de tiendas españolas**, enlace directo a la ficha de cada producto, compatibilidad comprobada y rendimiento según benchmarks. **No usa IA ni APIs de Google**: no hay claves ni costes por consulta.
 
-## Cómo consigue los datos
+## Cómo funciona
 
-1. **Selección de componentes**: Gemini con *Grounding with Google Search* busca qué se vende hoy en España y a qué precio, y devuelve una configuración compatible con sus especificaciones (socket, tipo de RAM, formato, consumo…).
-2. **Precios por tienda**: para cada componente, Gemini busca en Google las fichas del producto en PcComponentes, Coolmod, Amazon, Wipoid, LDLC, Neobyte, MediaMarkt, etc.
-3. **Verificación**: el servidor abre cada ficha y lee el precio y el stock de sus datos estructurados (schema.org / JSON-LD), comprobando que es el mismo modelo.
-   - **Verificado en tienda**: precio leído de la propia ficha en ese momento.
-   - **Precio en Google**: la tienda no deja leer la página, pero la URL sale de los resultados de Google y el precio es el que muestra Google.
-   - Se descartan URLs inventadas, páginas que no existen, listados de búsqueda y productos de otra variante.
-4. **Compatibilidad**: se calcula en código a partir de las especificaciones (socket, DDR, potencia de la fuente, formato placa/caja, longitud de la gráfica).
-
-Los precios se cachean en memoria (3 h por defecto) y se pueden volver a consultar desde cada componente.
+1. **Catálogo** (`server/catalog.ts`): procesadores, gráficas, placas, RAM, SSD, fuentes, cajas, disipadores, periféricos y portátiles con sus especificaciones reales y las fichas donde se venden (PcComponentes, Coolmod, Neobyte, Wipoid, Aussar, LDLC…).
+2. **Precios** (`server/priceService.ts`): el servidor lee cada ficha y saca el precio y el stock de sus datos estructurados (schema.org / JSON-LD), cada 6 horas.
+   - Solo acepta el precio si el nombre del producto en la tienda es exactamente el modelo del catálogo (descarta variantes, packs y reacondicionados).
+   - Si una ficha desaparece (404) se borra; si una tienda bloquea un rato, se mantiene el último precio leído hasta 48 h.
+   - Busca fichas nuevas en las páginas de categoría una vez al día.
+   - Una petición a la vez por tienda, con pausa entre peticiones, y respeta `robots.txt`.
+3. **Recomendación** (`server/engine.ts`): prueba todas las combinaciones de CPU y GPU, completa cada una con las piezas compatibles más baratas que tienen precio y elige la de más rendimiento para el uso (gaming, productividad, creación, desarrollo) que cabe en el presupuesto. Si no cabe nada, lo dice y muestra la opción más económica posible.
+4. **Rendimiento**: datos de Tom's Hardware (GPU y CPU Benchmarks Hierarchy 2026). **Compatibilidad**: socket, tipo de RAM, potencia de la fuente, formato de placa y caja.
 
 ## Puesta en marcha
 
 ```bash
 npm install
-cp .env.example .env   # pon tu GEMINI_API_KEY
-npm run dev            # desarrollo en http://localhost:3000
+npm run dev            # http://localhost:3000
 ```
 
 Producción:
@@ -29,15 +27,21 @@ npm run build
 NODE_ENV=production npm start
 ```
 
-Variables opcionales en `.env.example` (modelos, puerto, concurrencia, caché y límite de consultas por IP).
+Al arrancar, el servidor tarda unos minutos en leer todos los precios por primera vez (la web muestra el progreso). Los precios se guardan en `data/prices.json` para no empezar de cero en cada reinicio; si el contenedor no tiene volumen, simplemente se vuelven a leer.
+
+## Mantener el catálogo
+
+```bash
+npm run catalog:check                    # comprueba todo el catálogo contra las tiendas
+npm run catalog:check gpu-rtx5070        # solo algunos productos
+```
+
+Muestra qué productos tienen precio, en qué tiendas, y qué URLs fallan (404, bloqueo, robots.txt, otro producto). Para añadir un producto o una tienda, edita `server/catalog.ts` (y `server/stores.ts` si la tienda es nueva).
 
 ## Scripts
 
 - `npm run dev`: servidor con Vite en modo desarrollo
 - `npm run build` / `npm start`: compilación y servidor de producción
-- `npm test`: tests (extracción de precios, URLs, compatibilidad y flujo completo con IA simulada)
+- `npm test`: tests (lectura de precios, emparejado de modelos, robots.txt, motor de recomendación, API)
 - `npm run lint`: comprobación de tipos
-
-## Coste de la API
-
-Cada configuración hace 1 llamada para elegir componentes + 1 por componente para los precios, todas con búsqueda de Google. Con Gemini 3 se factura por búsqueda (las primeras 5.000 al mes son gratis). El límite por IP (`RATE_LIMIT_RECOMMEND_PER_HOUR`) protege tus créditos si la web es pública.
+- `npm run catalog:check`: estado real del catálogo en las tiendas

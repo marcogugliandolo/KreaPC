@@ -2,32 +2,28 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { createApp } from './server/app';
-import { createGeminiClient } from './server/gemini';
+import { CATALOG } from './server/catalog';
+import { PriceService } from './server/priceService';
 
 dotenv.config();
 
 const envNumber = (name: string, fallback: number) => {
-  const n = Number(process.env[name]);
-  return Number.isFinite(n) && process.env[name] !== '' && process.env[name] !== undefined ? n : fallback;
+  const raw = process.env[name];
+  const n = Number(raw);
+  return raw !== undefined && raw !== '' && Number.isFinite(n) ? n : fallback;
 };
 
 async function startServer() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  // Se prueba el primero; si Google lo retira o no está disponible, el siguiente.
-  const models = (process.env.GEMINI_MODEL || 'gemini-3.8-flash,gemini-3.6-flash')
-    .split(',')
-    .map((m) => m.trim())
-    .filter(Boolean);
-
-  if (!apiKey) console.warn('⚠️  Falta GEMINI_API_KEY: la web arrancará, pero no podrá generar configuraciones.');
-
-  const app = createApp({
-    ai: apiKey ? createGeminiClient(apiKey, models) : null,
-    priceConcurrency: envNumber('PRICE_CONCURRENCY', 4),
-    priceCacheMinutes: envNumber('PRICE_CACHE_MINUTES', 180),
-    recommendPerHour: envNumber('RATE_LIMIT_RECOMMEND_PER_HOUR', 15),
-    pricesPerHour: envNumber('RATE_LIMIT_PRICES_PER_HOUR', 60),
+  const prices = new PriceService(CATALOG, {
+    refreshHours: envNumber('PRICE_REFRESH_HOURS', 6),
+    discoveryHours: envNumber('PRICE_DISCOVERY_HOURS', 24),
+    maxAgeHours: envNumber('PRICE_MAX_AGE_HOURS', 48),
+    hostDelayMs: envNumber('STORE_DELAY_MS', 1500),
+    file: process.env.PRICES_FILE || path.join(process.cwd(), 'data', 'prices.json'),
+    log: (msg) => console.log(msg),
   });
+
+  const app = createApp({ prices, refreshPerHour: envNumber('RATE_LIMIT_REFRESH_PER_HOUR', 30) });
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -41,8 +37,9 @@ async function startServer() {
 
   const port = envNumber('PORT', 3000);
   app.listen(port, '0.0.0.0', () => {
-    console.log(`KreaPC en http://localhost:${port} (modelos: ${models.join(', ')})`);
+    console.log(`KreaPC en http://localhost:${port} · consultando precios de ${CATALOG.length} productos en segundo plano`);
   });
+  await prices.start();
 }
 
 startServer();

@@ -61,7 +61,7 @@ const decodeEntities = (s: string) =>
     .replace(/&nbsp;/g, ' ')
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 
-function parseJsonLoose(raw: string): unknown {
+export function parseJsonLoose(raw: string): unknown {
   const text = raw.trim().replace(/^<!--|-->$/g, '');
   try {
     return JSON.parse(text);
@@ -80,7 +80,7 @@ const hasType = (node: any, type: string) => {
   return Array.isArray(t) ? t.some((x) => String(x).toLowerCase() === type) : String(t ?? '').toLowerCase() === type;
 };
 
-function collectProducts(node: any, out: any[], depth = 0) {
+export function collectProducts(node: any, out: any[], depth = 0) {
   if (!node || typeof node !== 'object' || depth > 8) return;
   if (Array.isArray(node)) {
     node.forEach((n) => collectProducts(n, out, depth + 1));
@@ -102,7 +102,6 @@ function offersOf(product: any): PriceCandidate[] {
   const list: any[] = [];
   const push = (o: any) => (Array.isArray(o) ? o.forEach(push) : o && typeof o === 'object' && list.push(o));
   push(product.offers);
-  if (Array.isArray(product.hasVariant)) product.hasVariant.forEach((v: any) => push(v?.offers));
 
   const out: PriceCandidate[] = [];
   for (const o of list) {
@@ -119,13 +118,15 @@ function offersOf(product: any): PriceCandidate[] {
   return out;
 }
 
-function fromJsonLd(html: string): ExtractedProduct | null {
+/** Todos los productos con precio del JSON-LD (las variantes de un ProductGroup van por separado). */
+function fromJsonLd(html: string): ExtractedProduct[] {
   const re = /<script[^>]+type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;
   const products: any[] = [];
   for (const m of html.matchAll(re)) {
     const data = parseJsonLoose(m[1]);
     if (data) collectProducts(data, products);
   }
+  const out: ExtractedProduct[] = [];
   for (const p of products) {
     const offers = offersOf(p).filter((o) => !o.currency || o.currency.toUpperCase() === 'EUR');
     if (!offers.length) continue;
@@ -133,15 +134,15 @@ function fromJsonLd(html: string): ExtractedProduct | null {
     const pool = available.length ? available : offers;
     const best = pool.reduce((a, b) => (b.price < a.price ? b : a));
     const anyStock = offers.some((o) => o.inStock === true) ? true : offers.every((o) => o.inStock === false) ? false : null;
-    return {
-      title: typeof p.name === 'string' ? decodeEntities(p.name).trim() : undefined,
+    out.push({
+      title: typeof p.name === 'string' ? decodeEntities(p.name).trim() : pageTitle(html),
       price: best.price,
       currency: 'EUR',
       inStock: anyStock,
       source: 'jsonld',
-    };
+    });
   }
-  return null;
+  return out;
 }
 
 function metaContent(html: string, key: string): string | undefined {
@@ -196,9 +197,19 @@ function fromAmazon(html: string): ExtractedProduct | null {
   return { title: title ? decodeEntities(title).replace(/\s+/g, ' ').trim() : pageTitle(html), price, currency: 'EUR', inStock, source: 'amazon' };
 }
 
-export function extractProduct(html: string): ExtractedProduct {
-  return fromJsonLd(html) ?? fromMeta(html) ?? fromMicrodata(html) ?? fromAmazon(html) ?? { title: pageTitle(html), inStock: null, source: 'none' };
+/** Todos los productos con precio que hay en la página. */
+export function extractProducts(html: string): ExtractedProduct[] {
+  const fromLd = fromJsonLd(html);
+  if (fromLd.length) return fromLd;
+  const single = fromMeta(html) ?? fromMicrodata(html) ?? fromAmazon(html);
+  return single ? [single] : [];
 }
+
+export function extractProduct(html: string): ExtractedProduct {
+  return extractProducts(html)[0] ?? { title: pageTitle(html), inStock: null, source: 'none' };
+}
+
+export { pageTitle };
 
 /** Páginas de reto anti-bot (Cloudflare, captcha de Amazon…). */
 export function isBotChallenge(html: string): boolean {
