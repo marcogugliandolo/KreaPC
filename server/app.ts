@@ -59,6 +59,11 @@ export function createApp(deps: AppDeps) {
     res.json(deps.prices.status());
   });
 
+  /** Diagnóstico del catálogo: precios por producto y fallos por tienda. */
+  app.get('/api/diagnostico', (_req, res) => {
+    res.json(deps.prices.report());
+  });
+
   /** Configuración recomendada con los precios ya comprobados en las tiendas. */
   app.post('/api/recommend', (req, res) => {
     try {

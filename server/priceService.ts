@@ -110,7 +110,7 @@ export class PriceService {
   status(): PriceStatus {
     const itemsWithPrice = this.catalog.filter((i) => this.getPrices(i.id).offers.length > 0).length;
     return {
-      ready: Boolean(this.lastRefresh) || itemsWithPrice > 0,
+      ready: Boolean(this.lastRefresh),
       refreshing: Boolean(this.running),
       lastRefresh: this.lastRefresh,
       progress: { ...this.progress },
@@ -160,6 +160,29 @@ export class PriceService {
       .sort((a, b) => a.price - b.price);
   }
 
+  /** Diagnóstico: qué productos tienen precio y por qué falla cada URL, agrupado por tienda. */
+  report() {
+    const stores: Record<string, { ok: number; fallos: Record<string, number> }> = {};
+    const items = this.catalog.map((item) => {
+      const st = this.state[item.id];
+      const offers = this.getPrices(item.id).offers;
+      for (const o of Object.values(st?.offers ?? {})) (stores[o.storeId] ??= { ok: 0, fallos: {} }).ok++;
+      for (const [url, reason] of Object.entries(st?.failures ?? {})) {
+        const host = identifyStore(url)?.id ?? url;
+        const key = reason.replace(/: ".*$/, '').replace(/^error: .*/, 'error de red');
+        const s = (stores[host] ??= { ok: 0, fallos: {} });
+        s.fallos[key] = (s.fallos[key] ?? 0) + 1;
+      }
+      return {
+        id: item.id,
+        precios: offers.map((o) => `${o.store} ${o.price} €`),
+        comprobado: st?.checkedAt,
+        fallos: st?.failures ?? {},
+      };
+    });
+    return { estado: this.status(), tiendas: stores, productos: items };
+  }
+
   /* -------------------------------- Refresco -------------------------------- */
 
   refreshAll(): Promise<ItemReport[]> {
@@ -174,6 +197,7 @@ export class PriceService {
             return { id: item.id, name: item.name, offers: [], failures: { general: String(err) } };
           });
           this.progress.done++;
+          if (this.progress.done % 5 === 0) await this.save(); // no perder lo leído si se reinicia
           return r;
         });
         this.lastRefresh = this.opts.now().toISOString();
