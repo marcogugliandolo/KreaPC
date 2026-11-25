@@ -259,6 +259,10 @@ export const CATALOG: CatalogItem[] = [
     exclude: ['ti', ...NOT_LAPTOP],
     query: 'RTX 5060 8GB',
     seeds: [
+      'https://www.appinformatica.com/product/90yv0n10-m0na00-asus-prime-geforce-rtx-5060-oc-edition-8gb-gddr7-dlss4',
+      'https://www.alternate.es/ASUS/GeForce-RTX-5060-DUAL-OC-8GB-Tarjeta-gr%C3%A1fica/html/product/100129563',
+      'https://www.alternate.es/ASUS/Prime-RTX5060-O8G-NVIDIA-GeForce-RTX-5060-8-GB-GDDR7-Tarjeta-gr%C3%A1fica/html/product/100129570',
+      'https://www.alternate.es/ASUS/TUF-Gaming-TUF-RTX5060-O8G-GAMING-NVIDIA-GeForce-RTX-5060-8-GB-GDDR7-Tarjeta-gr%C3%A1fica/html/product/100129572',
       LDLC('PB00681084'), LDLC('PB00684439'), LDLC('PB00684415'), LDLC('PB00684427'), LDLC('PB00684414'), LDLC('PB00703193'), LDLC('PB00686247'), LDLC('PB00761339'), LDLC('PB00683081'),
       'https://www.pccomponentes.com/tarjeta-grafica-gigabyte-geforce-rtx-5060-windforce-oc-8gb-gddr7-reflex-2-rtx-ai-dlss4',
       'https://www.pccomponentes.com/tarjeta-grafica-msi-geforce-rtx-5060-ventus-2x-oc-8gb-gddr7-reflex-2-rtx-ai-dlss4',
@@ -267,7 +271,8 @@ export const CATALOG: CatalogItem[] = [
       'https://www.coolmod.com/gigabyte-geforce-rtx-5060-windforce-max-oc-v2-8gb-gddr7-dlss4/',
       'https://www.aussar.es/tarjetas-graficas/vga-asus-geforceR-rtx-5060-8gb-dual-white-oc.html',
     ],
-    listings: [PCC_GPU('nvidia-rtx-5060'), NEOBYTE_NV('5060')],
+    listings: [
+      'https://www.alternate.es/Tarjetas-gr%C3%A1ficas/NVIDIA/RTX-5060',PCC_GPU('nvidia-rtx-5060'), NEOBYTE_NV('5060')],
     reason: 'Para jugar en 1080p con ajustes altos y DLSS 4.',
     specs: { tdpW: 145, summary: '8 GB GDDR7 · DLSS 4' },
     vramGB: 8,
@@ -899,7 +904,8 @@ export const CATALOG: CatalogItem[] = [
     match: ['5050', 'ssd'],
     laptop: true,
     query: 'portátil RTX 5050',
-    listings: ['https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5050'], // patrón
+    listings: [
+      'https://www.appinformatica.com/portatiles-msi','https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5050'], // patrón
     reason: 'Gaming de entrada en 1080p con DLSS 4.',
     specs: { summary: 'NVIDIA RTX 5050 Laptop' },
     tier: 2,
@@ -912,6 +918,12 @@ export const CATALOG: CatalogItem[] = [
     laptop: true,
     query: 'portátil RTX 5060',
     seeds: [
+      'https://www.pcbox.com/product/9s7-15q342-687-portatil-msi-cyborg-15-b13wfkg-687xes-core-i7-13620h--16gb---1tb',
+      'https://www.pcbox.com/product/nh-u1geb-00g-portatil-gaming-acer-nitro-v16-ryzen-7-260--32gb-1tb-ssd---rtx-50',
+      'https://www.pcbox.com/product/9rga6ab6vhkhjh0es000-portatil-gigabyte-a16-3vhk3es864sd-r7-260-32gb-1tb-rtx5060',
+      'https://www.pcbox.com/product/9s7-15ql42-094-msi-cyborg-a15-094xes-r9-270-64gb-1tb-5060-15-6',
+      'https://www.pcbox.com/product/83je00h0sp-loq-15irx10-core-i7-32gb-none-odd-home-15-6-1tb',
+      'https://www.appinformatica.com/product/83q70013sp-legion5-15ahp11-r7-32-512-w11h',
       'https://www.pccomponentes.com/portatil-lenovo-loq-15irx10-15-6-intel-core-i7-13645hx-16gb-512gb-ssd-rtx-5060-freedos',
       'https://www.pccomponentes.com/portatil-lenovo-loq-15irx10-156-intel-core-i5-13450hx-16gb-1tb-ssd-rtx-5060-windows-11-home',
       'https://www.pccomponentes.com/portatil-lenovo-loq-15irx10-156-intel-core-i7-13700hx-32gb-1tb-ssd-rtx-5060-8gb-luna-grey-rgb-e-shutter',
@@ -920,7 +932,8 @@ export const CATALOG: CatalogItem[] = [
       'https://www.pccomponentes.com/portatil-asus-tuf-gaming-tuf608jmr-rv038-16-intel-core-i7-14650hx-32gb-1tb-ssd-rtx-5060-8gb-qwerty-esp-gris',
       'https://www.coolmod.com/asus-tuf-gaming-tuf608jmr-rv038-i7-14650hx-rtx-5060-32gb-1tb-16-freedos/',
     ],
-    listings: ['https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5060'],
+    listings: [
+      'https://www.appinformatica.com/portatiles-msi','https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5060'],
     reason: 'Juega en 1080p con ajustes altos y trazado de rayos.',
     specs: { summary: 'NVIDIA RTX 5060 Laptop' },
     tier: 3,
@@ -933,7 +946,8 @@ export const CATALOG: CatalogItem[] = [
     exclude: ['ti'],
     laptop: true,
     query: 'portátil RTX 5070',
-    listings: ['https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5070'], // patrón
+    listings: [
+      'https://www.appinformatica.com/portatiles-msi','https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5070'], // patrón
     reason: 'Más potencia para pantallas de alta resolución y tasa de refresco.',
     specs: { summary: 'NVIDIA RTX 5070 Laptop' },
     tier: 4,
@@ -945,7 +959,8 @@ export const CATALOG: CatalogItem[] = [
     match: ['5070', 'ti', 'ssd'],
     laptop: true,
     query: 'portátil RTX 5070 Ti',
-    listings: ['https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5070-ti'], // patrón
+    listings: [
+      'https://www.appinformatica.com/portatiles-msi','https://www.pccomponentes.com/categorias/portatiles/nvidia-rtx-5070-ti'], // patrón
     reason: 'Gama alta: 1440p con ajustes altos en portátil.',
     specs: { summary: 'NVIDIA RTX 5070 Ti Laptop' },
     tier: 5,

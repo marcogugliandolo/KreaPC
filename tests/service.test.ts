@@ -148,6 +148,32 @@ test('PriceService: una tienda que no responde también se pausa y no atasca la 
   assert.match(report.failures[urls[3]], /no responde/);
 });
 
+test('PriceService: comprueba qué tiendas dejan leer su web al servidor', async () => {
+  const pages: Record<string, Page> = {
+    'https://www.ldlc.com/es-es/': { status: 200, body: '<html><title>LDLC</title></html>' },
+    'https://www.pccomponentes.com/': { status: 403, body: '<title>Just a moment...</title>' },
+  };
+  const svc = new PriceService([], { fetchFn: fakeFetch(pages), hostDelayMs: 0, file: null });
+  const access = await svc.probeStores();
+  assert.equal(access.ldlc.estado, 'responde');
+  assert.equal(access.pccomponentes.estado, 'bloquea (HTTP 403)');
+  assert.ok(svc.report().accesoTiendas.alternate, 'aparece en el diagnóstico');
+});
+
+test('PriceService: un portátil se reconoce también por su descripción', async () => {
+  const url = 'https://www.xtremmedia.com/asus-tuf-a16-fa608um.html';
+  const item: CatalogItem = { ...CATALOG_BY_ID.get('laptop-rtx5060')!, seeds: [url], listings: [] };
+  const html = `<html><script type="application/ld+json">${JSON.stringify({
+    '@type': 'Product',
+    name: 'ASUS TUF Gaming A16 FA608UM-RV001',
+    description: 'Portátil gaming 16" AMD Ryzen 7 260, 16GB, 1TB SSD, NVIDIA GeForce RTX 5060 8GB',
+    offers: { '@type': 'Offer', price: '1199.00', priceCurrency: 'EUR', availability: 'https://schema.org/InStock' },
+  })}</script></html>`;
+  const svc = new PriceService([item], { fetchFn: fakeFetch({ [url]: { status: 200, body: html } }), hostDelayMs: 0, file: null });
+  const report = await svc.refreshItem(item);
+  assert.deepEqual(report.offers.map((o) => [o.store, o.price]), [['Xtremmedia', 1199]]);
+});
+
 /* ------------------------------- Motor ------------------------------------ */
 
 /** Precios simulados (precios orientativos de noviembre de 2026 vistos en las tiendas). */
